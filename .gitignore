@@ -1,0 +1,4 @@
+.envrc
+Cargo.lock
+target/
+todo.org
