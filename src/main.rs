@@ -2,7 +2,6 @@ extern crate chess;
 extern crate pgn_reader;
 extern crate rocksdb;
 extern crate shakmaty;
-extern crate sysinfo;
 extern crate zstd;
 
 use pgn_reader::{BufferedReader, Color, Outcome, SanPlus, Skip, Visitor};
@@ -11,7 +10,6 @@ use shakmaty::{fen::Fen, uci::Uci, CastlingMode, Chess, Move, Position};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::collections::HashMap;
-use sysinfo::{System, SystemExt};
 use zstd::stream::read::Decoder;
 
 fn main() {
@@ -35,8 +33,6 @@ fn main() {
     let db = DB::open(&db_opts, db_path).unwrap();
     let mut cache: HashMap<Vec<u8>, u64> = HashMap::new();
 
-    let mut sys = System::new_all();
-
     let reader = BufReader::new(file);
     for line in reader.lines() {
         let compressed_pgn_file = line.unwrap();
@@ -50,7 +46,7 @@ fn main() {
         };
         let decoder = Decoder::new(file).unwrap();
         let mut buffered = BufferedReader::new(decoder);
-        let mut visitor = MyVisitor::new(&db, &mut cache, &mut sys);
+        let mut visitor = MyVisitor::new(&db, &mut cache);
         if let Err(err) = buffered.read_all(&mut visitor) {
             println!("Failed to read games: {}", err);
             std::process::exit(1);
@@ -87,7 +83,6 @@ struct MyVisitor<'a> {
     outcome: Option<Outcome>,
     db: &'a DB,
     cache: &'a mut HashMap<Vec<u8>, u64>,
-    sys: &'a mut System,
     game_count: u64,
     move_count: u64,
 }
@@ -96,14 +91,12 @@ impl MyVisitor<'_> {
     fn new<'a>(
         db: &'a DB,
         cache: &'a mut HashMap<Vec<u8>, u64>,
-        sys: &'a mut System,
     ) -> MyVisitor<'a> {
         MyVisitor {
             board: Chess::default(),
             outcome: None,
             db,
             cache,
-            sys,
             game_count: 0,
             move_count: 0,
         }
@@ -131,7 +124,6 @@ impl Visitor for MyVisitor<'_> {
                 write_pos_info(
                     self.db,
                     self.cache,
-                    self.sys,
                     &self.board,
                     self.outcome,
                     Some(&chess_move),
@@ -167,7 +159,6 @@ impl Visitor for MyVisitor<'_> {
         write_pos_info(
             self.db,
             self.cache,
-            self.sys,
             &self.board,
             self.outcome,
             None,
@@ -178,29 +169,28 @@ impl Visitor for MyVisitor<'_> {
 fn write_pos_info(
     db: &DB,
     cache: &mut HashMap<Vec<u8>, u64>,
-    sys: &mut System,
     position: &Chess,
     outcome: Option<Outcome>,
     chess_move: Option<&Move>,
 ) {
     let pc_key = create_pc_key(position);
-    increment_key(db, cache, sys, pc_key);
+    increment_key(db, cache, pc_key);
 
     if let Some(Outcome::Decisive { winner: color }) = outcome {
         match color {
             Color::White => {
                 let pwc_key = create_pwc_key(position);
-                increment_key(db, cache, sys, pwc_key);
+                increment_key(db, cache, pwc_key);
             }
             Color::Black => {
                 let pbc_key = create_pbc_key(position);
-                increment_key(db, cache, sys, pbc_key);
+                increment_key(db, cache, pbc_key);
             }
         }
     }
     if let Some(m) = chess_move {
         let puc_key = create_puc_key(position, m);
-        increment_key(db, cache, sys, puc_key);
+        increment_key(db, cache, puc_key);
     }
 }
 
@@ -234,7 +224,6 @@ fn create_puc_key(position: &Chess, chess_move: &Move) -> Vec<u8> {
 fn increment_key(
     db: &DB,
     cache: &mut HashMap<Vec<u8>, u64>,
-    sys: &mut System,
     key: Vec<u8>,
 ) where {
     if cache.contains_key(&key) {
@@ -255,10 +244,6 @@ fn increment_key(
             },
             Err(err) => println!("Error: {:?}", err),
         }
-    }
-    sys.refresh_memory(); // not sure if needed
-    if sys.available_memory() < 5000000000 {
-        write_cache(db, cache);
     }
 }
 
