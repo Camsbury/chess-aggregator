@@ -236,30 +236,34 @@ fn increment_key(
     cache: &mut HashMap<Vec<u8>, u64>,
     sys: &mut System,
     key: Vec<u8>,
-) where {
-    if cache.contains_key(&key) {
-        let count = cache[&key];
-        cache.insert(key, count + 1);
-    } else {
+) {
         match db.get_pinned(&key) {
             Ok(maybe_value) => match maybe_value {
                 Some(value) => {
                     let mut bytes = [0u8; 8];
                     bytes.copy_from_slice(value.as_ref());
                     let count = u64::from_be_bytes(bytes);
-                    cache.insert(key, count + 1);
+
+                    if let Err(err) = db.put(
+                        key.as_slice(),
+                        (count + 1).to_be_bytes()
+                    ) {
+                        println!("Failed to write to db: {}", err);
+                        std::process::exit(1);
+                    }
                 }
                 None => {
-                    cache.insert(key, 1);
+                    if let Err(err) = db.put(
+                        key.as_slice(),
+                        u64::to_be_bytes(1)
+                    ) {
+                        println!("Failed to write to db: {}", err);
+                        std::process::exit(1);
+                    }
                 }
             },
             Err(err) => println!("Error: {:?}", err),
         }
-    }
-    sys.refresh_memory(); // not sure if needed
-    if sys.available_memory() < 5000000000 {
-        write_cache(db, cache);
-    }
 }
 
 fn write_cache(db: &DB, cache: &mut HashMap<Vec<u8>, u64>) {
