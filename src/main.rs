@@ -10,6 +10,7 @@ use rocksdb::{Options, WriteBatch, DB};
 use shakmaty::{fen::Fen, uci::Uci, CastlingMode, Chess, Move, Position};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::collections::HashMap;
 use sysinfo::{System, SystemExt};
 use zstd::stream::read::Decoder;
 
@@ -32,7 +33,7 @@ fn main() {
     let mut db_opts = Options::default();
     db_opts.create_if_missing(true);
     let db = DB::open(&db_opts, db_path).unwrap();
-    let mut batch = WriteBatch::default();
+    let mut cache: HashMap<Vec<u8>, u64> = HashMap::new();
 
     let mut sys = System::new_all();
 
@@ -49,16 +50,13 @@ fn main() {
         };
         let decoder = Decoder::new(file).unwrap();
         let mut buffered = BufferedReader::new(decoder);
-        let mut visitor = MyVisitor::new(&db, &mut batch, &mut sys);
+        let mut visitor = MyVisitor::new(&db, &mut cache, &mut sys);
         if let Err(err) = buffered.read_all(&mut visitor) {
             println!("Failed to read games: {}", err);
             std::process::exit(1);
         }
     }
-    if let Err(err) = db.write(batch) {
-        println!("Failed to write batch: {}", err);
-        std::process::exit(1);
-    }
+    write_cache(&db, &mut cache);
 
     ////////////////////////////////////////////////////////////////////////////
     // NOTE: Testing that the db is actually being written to
@@ -88,7 +86,7 @@ struct MyVisitor<'a> {
     board: Chess,
     outcome: Option<Outcome>,
     db: &'a DB,
-    batch: &'a mut WriteBatch,
+    cache: &'a mut HashMap<Vec<u8>, u64>,
     sys: &'a mut System,
     game_count: u64,
     move_count: u64,
@@ -97,14 +95,14 @@ struct MyVisitor<'a> {
 impl MyVisitor<'_> {
     fn new<'a>(
         db: &'a DB,
-        batch: &'a mut WriteBatch,
+        cache: &'a mut HashMap<Vec<u8>, u64>,
         sys: &'a mut System,
     ) -> MyVisitor<'a> {
         MyVisitor {
             board: Chess::default(),
             outcome: None,
             db,
-            batch,
+            cache,
             sys,
             game_count: 0,
             move_count: 0,
@@ -132,7 +130,7 @@ impl Visitor for MyVisitor<'_> {
             Ok(chess_move) => {
                 write_pos_info(
                     self.db,
-                    self.batch,
+                    self.cache,
                     self.sys,
                     &self.board,
                     self.outcome,
@@ -168,7 +166,7 @@ impl Visitor for MyVisitor<'_> {
     fn end_game(&mut self) -> Self::Result {
         write_pos_info(
             self.db,
-            self.batch,
+            self.cache,
             self.sys,
             &self.board,
             self.outcome,
@@ -179,30 +177,30 @@ impl Visitor for MyVisitor<'_> {
 
 fn write_pos_info(
     db: &DB,
-    batch: &mut WriteBatch,
+    cache: &mut HashMap<Vec<u8>, u64>,
     sys: &mut System,
     position: &Chess,
     outcome: Option<Outcome>,
     chess_move: Option<&Move>,
 ) {
     let pc_key = create_pc_key(position);
-    increment_key(db, batch, sys, pc_key.as_slice());
+    increment_key(db, cache, sys, pc_key);
 
     if let Some(Outcome::Decisive { winner: color }) = outcome {
         match color {
             Color::White => {
                 let pwc_key = create_pwc_key(position);
-                increment_key(db, batch, sys, pwc_key.as_slice());
+                increment_key(db, cache, sys, pwc_key);
             }
             Color::Black => {
                 let pbc_key = create_pbc_key(position);
-                increment_key(db, batch, sys, pbc_key.as_slice());
+                increment_key(db, cache, sys, pbc_key);
             }
         }
     }
     if let Some(m) = chess_move {
         let puc_key = create_puc_key(position, m);
-        increment_key(db, batch, sys, puc_key.as_slice());
+        increment_key(db, cache, sys, puc_key);
     }
 }
 
@@ -235,31 +233,47 @@ fn create_puc_key(position: &Chess, chess_move: &Move) -> Vec<u8> {
 
 fn increment_key(
     db: &DB,
-    batch: &mut WriteBatch,
+    cache: &mut HashMap<Vec<u8>, u64>,
     sys: &mut System,
-    key: &[u8],
-) {
-    match db.get_pinned(key) {
-        Ok(maybe_value) => match maybe_value {
-            Some(value) => {
-                let mut bytes = [0u8; 8];
-                bytes.copy_from_slice(value.as_ref());
-                let count = u64::from_be_bytes(bytes);
-                batch.put(key, (count + 1).to_be_bytes());
-            }
-            None => {
-                batch.put(key, u64::to_be_bytes(1));
-            }
-        },
-        Err(err) => println!("Error: {:?}", err),
+    key: Vec<u8>,
+) where {
+    if cache.contains_key(&key) {
+        let count = cache[&key];
+        cache.insert(key, count + 1);
+    } else {
+        match db.get_pinned(&key) {
+            Ok(maybe_value) => match maybe_value {
+                Some(value) => {
+                    let mut bytes = [0u8; 8];
+                    bytes.copy_from_slice(value.as_ref());
+                    let count = u64::from_be_bytes(bytes);
+                    cache.insert(key, count + 1);
+                }
+                None => {
+                    cache.insert(key, 1);
+                }
+            },
+            Err(err) => println!("Error: {:?}", err),
+        }
     }
     sys.refresh_memory(); // not sure if needed
     if sys.available_memory() < 5000000000 {
-        if let Err(err) = db.write(std::mem::take(batch)) {
+        write_cache(db, cache);
+    }
+}
+
+fn write_cache(db: &DB, cache: &mut HashMap<Vec<u8>, u64>) {
+        let mut batch = WriteBatch::default();
+
+        // NOTE: my attempt at freeing memory as I iterate?
+        cache.retain(|key, value| {
+            batch.put(key.as_slice(),value.to_be_bytes());
+            false
+        });
+        if let Err(err) = db.write(batch) {
             println!("Failed to write batch: {}", err);
             std::process::exit(1);
         }
-    }
 }
 
 fn fetch_pos_count(db: &DB, pos: &Chess) -> u64 {
