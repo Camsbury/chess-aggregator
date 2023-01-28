@@ -1,5 +1,5 @@
 [package]
-name = "game-ingestor"
+name = "chess-aggregator"
 version = "0.1.0"
 
 [dependencies]
