@@ -1,4 +1,5 @@
 extern crate btoi;
+extern crate nibble_vec;
 extern crate pgn_reader;
 extern crate radix_trie;
 extern crate rocksdb;
@@ -10,7 +11,6 @@ pub mod visitor;
 pub mod traversal;
 
 use pgn_reader::BufferedReader;
-use radix_trie::{TrieCommon};
 // use rocksdb::{Options, DB, WriteBatch};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -62,38 +62,7 @@ fn main() {
         if let Err(err) = buffered.read_all(&mut visitor) {
             panic!("Failed to read games: {:?}", err);
         }
-        println!("{} lines!", visitor.san_tree.len());
         traversal::extract_stats(visitor.san_tree);
-        // for (k, v) in visitor.san_tree.iter().take(10) {
-        //     println!("Key of: {k}");
-        //     println!("Val of: {v}");
-        // }
-        // println!("Na3 as bytes: {:?}", " Na3 d5 c3".as_bytes());
-        // println!("Attempt: {}", String::from_utf8(vec![78, 96, 19, 50, 6]).unwrap());
-        // println!("{}", String::from_utf8(vec![78, 97, 51]).unwrap());
-        // for (i, child) in visitor.san_tree.children().enumerate() {
-        //     println!("Child 1: {i}");
-        //     let prefix1 = child.prefix();
-        //     let p1s = prefix1.clone().as_bytes().to_vec();
-        //     println!("Prefix 1: {}", String::from_utf8(p1s).unwrap());
-        //     for (i, child) in child.children().enumerate() {
-        //         println!("\tChild 2: {i}");
-        //         let prefix2 = prefix1.clone().join(child.prefix());
-        //         let p2s = prefix2.as_bytes().to_vec();
-        //         println!("\tPrefix 2: {}", String::from_utf8(p2s).unwrap());
-        //         for (i, child) in child.children().enumerate() {
-        //             println!("\t\tChild 3: {i}");
-        //             match child.value() {
-        //                 Some(count) => println!("\t\t Count of: {count}"),
-        //                 None => println!("No count yet..."),
-        //             }
-        //             let prefix3 = prefix2.clone().join(child.prefix());
-        //             let p3s = prefix3.as_bytes().to_vec();
-        //             println!("\t\tPrefix 3 Vec: {:?}", p3s.clone());
-        //             println!("\t\tPrefix 3: {}", String::from_utf8(p3s).unwrap());
-        //         }
-        //     }
-        // }
     }
 }
 
