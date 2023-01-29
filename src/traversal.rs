@@ -43,17 +43,20 @@ impl TraversalStep<'_> {
     }
 }
 
-pub fn extract_stats(tree: Trie<String, GameStats>) {
+pub fn extract_stats(
+    tree: Trie<String, GameStats>
+) -> HashMap<Chess, GameStats> {
     let mut stack = vec![TraversalStep::new(&tree)];
     let mut pos_stats: HashMap<Chess, GameStats> = HashMap::new();
     while !stack.is_empty() {
-        let mut step = stack.pop().unwrap();
-        // println!("{:?}", step.tree.prefix().clone().as_bytes().to_vec());
+        let step = stack.pop().unwrap();
         for child in step.tree.children() {
             let prefix = step.prefix_acc.clone().join(child.prefix());
             let prefix_vec = &prefix.as_bytes().to_vec()[step.offset..];
             let new_offset = prefix_vec.iter().rposition(|x| *x == SEPARATOR);
+            let mut game_stack = step.game_stack.clone();
 
+            // FIXME: only shows the first move for each branch...
             // TODO: write with and_then!
             if let Some(end) = new_offset {
                 if end > step.offset {
@@ -61,15 +64,14 @@ pub fn extract_stats(tree: Trie<String, GameStats>) {
                         prefix_vec[step.offset..end].to_vec()
                     ) {
                         for m_str in moves_string.split_whitespace() {
-                            if let Some(new_pos) = step.game_stack.last() {
+                            if let Some(new_pos) = game_stack.last() {
                                 let san_may: Result<San, _> = m_str.parse();
                                 if let Ok(san_move) = san_may {
                                     let move_may: Result<Move, _> =
                                         san_move.to_move(&new_pos.clone());
                                     if let Ok(m) = move_may {
-                                        if new_pos.clone().play(&m).is_ok() {
-                                            let new_pos = new_pos.clone();
-                                            step.game_stack.push(new_pos);
+                                        if let Ok(new_pos) = new_pos.clone().play(&m) {
+                                            game_stack.push(new_pos);
                                         } else {
                                             break;
                                         }
@@ -87,21 +89,23 @@ pub fn extract_stats(tree: Trie<String, GameStats>) {
                 }
             }
 
-            if let Some(game_stats) = step.tree.value() {
-                for pos in &step.game_stack {
-                    pos_stats
-                        .entry(pos.clone())
-                        .or_insert(GameStats::new())
-                        .combine(&game_stats);
+            if let Some(game_stats) = child.value() {
+                for pos in &game_stack {
+                    let base_stats = match pos_stats.get(pos) {
+                        Some(stats) => *stats,
+                        None => GameStats::new(),
+                    };
+                    pos_stats.insert(pos.clone(), base_stats.combine(game_stats));
                 }
             }
 
             stack.push(TraversalStep::build_step(
                 child,
-                step.game_stack.clone(), //figure out how to not clone?
+                game_stack, //figure out how to not clone?
                 prefix,
                 new_offset.unwrap_or(step.offset),
             ));
         }
     }
+    pos_stats
 }

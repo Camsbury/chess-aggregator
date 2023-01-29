@@ -11,12 +11,13 @@ pub mod visitor;
 pub mod traversal;
 
 use pgn_reader::BufferedReader;
+use shakmaty::{EnPassantMode, fen::Fen};
 // use rocksdb::{Options, DB, WriteBatch};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use zstd::stream::read::Decoder;
 
-#[derive(Copy)]
+#[derive(Debug, Copy, Clone)]
 pub struct GameStats {
     pub black: u32,
     pub white: u32,
@@ -81,7 +82,11 @@ fn main() {
         if let Err(err) = buffered.read_all(&mut visitor) {
             panic!("Failed to read games: {:?}", err);
         }
-        traversal::extract_stats(visitor.san_tree);
+        let pos_stats = traversal::extract_stats(visitor.san_tree);
+        // for (k, v) in pos_stats.iter().take(5) {
+        //     println!("Key: {}", Fen::from_position(k.clone(), EnPassantMode::Always));
+        //     dbg!("Val: {}", v);
+        // }
     }
 }
 
