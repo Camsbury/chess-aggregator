@@ -9,15 +9,10 @@ use pgn_reader::{
 };
 use radix_trie::{Trie};
 use sysinfo::{System, SystemExt};
+use crate::GameStats;
 
 const MIN_RATING: u32 = 2000;
 const MIN_PLY_COUNT: u32 = 7;
-
-pub struct GameStats {
-    pub black: u32,
-    pub white: u32,
-    pub draw:  u32,
-}
 
 pub struct MyVisitor { // 'a lifetime
     // db: &'a DB,

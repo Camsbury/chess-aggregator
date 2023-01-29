@@ -7,12 +7,20 @@ extern crate sysinfo;
 extern crate zstd;
 
 pub mod visitor;
+pub mod traversal;
+
 use pgn_reader::BufferedReader;
 use radix_trie::{TrieCommon};
 // use rocksdb::{Options, DB, WriteBatch};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use zstd::stream::read::Decoder;
+
+pub struct GameStats {
+    pub black: u32,
+    pub white: u32,
+    pub draw:  u32,
+}
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -55,6 +63,7 @@ fn main() {
             panic!("Failed to read games: {:?}", err);
         }
         println!("{} lines!", visitor.san_tree.len());
+        traversal::extract_stats(visitor.san_tree);
         // for (k, v) in visitor.san_tree.iter().take(10) {
         //     println!("Key of: {k}");
         //     println!("Val of: {v}");
