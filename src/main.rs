@@ -6,8 +6,8 @@ extern crate shakmaty;
 extern crate sysinfo;
 extern crate zstd;
 
-pub mod pgn;
-use pgn_reader::{BufferedReader};
+pub mod visitor;
+use pgn_reader::BufferedReader;
 use radix_trie::{TrieCommon};
 // use rocksdb::{Options, DB, WriteBatch};
 use std::fs::File;
@@ -47,7 +47,7 @@ fn main() {
         let decoder = Decoder::new(file).unwrap();
         let mut buffered = BufferedReader::new(decoder);
         // let mut batch = WriteBatch::default();
-        let mut visitor = pgn::MyVisitor::new(
+        let mut visitor = visitor::MyVisitor::new(
             // &db,
             // &mut batch,
         );
