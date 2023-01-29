@@ -1,3 +1,4 @@
+extern crate btoi;
 extern crate pgn_reader;
 extern crate radix_trie;
 extern crate rocksdb;

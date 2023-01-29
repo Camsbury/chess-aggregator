@@ -3,6 +3,7 @@ name = "chess-aggregator"
 version = "0.1.0"
 
 [dependencies]
+btoi = "0.4.2"
 chess = "3.2.0"
 pgn-reader = "0.22.0"
 radix_trie = "0.2.1"
