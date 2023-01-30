@@ -9,7 +9,7 @@ use pgn_reader::{
 };
 use radix_trie::{Trie};
 use sysinfo::{System, SystemExt};
-use crate::GameStats;
+use game_stats::GameStats;
 
 const MIN_RATING: u32 = 2000;
 const MIN_PLY_COUNT: u32 = 7;
@@ -98,7 +98,7 @@ impl Visitor for MyVisitor { // '_ lifetime
         if self.ply_count > MIN_PLY_COUNT {
             let s = std::mem::take(&mut self.san_string);
             self.sys.refresh_memory();
-            // self.sys.available_memory()
+            self.sys.available_memory();
             match self.winner {
                 Some(Color::White) => self.san_tree.map_with_default(
                     s,

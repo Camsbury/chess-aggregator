@@ -9,6 +9,7 @@ extern crate zstd;
 
 pub mod visitor;
 pub mod traversal;
+pub mod game_stats;
 
 use pgn_reader::BufferedReader;
 use shakmaty::{EnPassantMode, fen::Fen};
@@ -16,31 +17,6 @@ use shakmaty::{EnPassantMode, fen::Fen};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use zstd::stream::read::Decoder;
-
-#[derive(Debug, Copy, Clone)]
-pub struct GameStats {
-    pub black: u32,
-    pub white: u32,
-    pub draw:  u32,
-}
-
-impl GameStats {
-    fn new() -> GameStats {
-        GameStats {
-            black: 0,
-            white: 0,
-            draw: 0,
-        }
-    }
-
-    fn combine(self, other: &GameStats) -> GameStats {
-        GameStats {
-            black: self.black + other.black,
-            white: self.white + other.white,
-            draw: self.draw + other.draw,
-        }
-    }
-}
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
