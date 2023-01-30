@@ -124,6 +124,8 @@ pub fn extract_stats(
                     }
                     move_may = game.game_move.clone();
                 }
+                let old_batch = std::mem::take(&mut batch);
+                db.write(old_batch).expect("Batch couldn't write to DB");
             }
 
             stack.push(TraversalStep::build_step(
@@ -134,5 +136,5 @@ pub fn extract_stats(
             ));
         }
     }
-    db.write(batch).ok().unwrap(); //TODO: error handling
+    db.write(batch).expect("Batch couldn't write to DB");
 }

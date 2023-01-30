@@ -67,7 +67,5 @@ pub fn update_pos_move(
     } else {
         batch.put(PMC.to_owned() + &fen + &chess_move.to_string(), count.to_be_bytes());
     }
-    // TODO: combine read stats with passed ones before writing
-    batch.put(PMC.to_owned() + &fen + &chess_move.to_string(), count.to_be_bytes());
 }
 

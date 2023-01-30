@@ -61,6 +61,12 @@ fn main() {
             &mut visitor.san_tree,
         );
         let starting_pos = Chess::new();
+        if let Some(stats) = chess_db::get_pos_stats(
+            &db,
+            &starting_pos,
+        ) {
+            dbg!("Starting stats: {}", &stats);
+        }
         if let Some(count) = chess_db::get_pos_move(
             &db,
             &starting_pos,
