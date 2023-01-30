@@ -61,7 +61,7 @@ fn main() {
             &mut visitor.san_tree,
         );
         let starting_pos = Chess::new();
-        if let Some(stats) = chess_db::get_pos_stats(
+        if let Some(stats) = chess_db::get_pos_wins(
             &db,
             &starting_pos,
         ) {

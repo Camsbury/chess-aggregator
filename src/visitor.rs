@@ -10,7 +10,7 @@ use pgn_reader::{
 use radix_trie::Trie;
 use rocksdb::DB;
 use sysinfo::{System, SystemExt};
-use game_stats::GameStats;
+use game_stats::GameWins;
 use traversal;
 
 const MIN_RATING: u32 = 2000;
@@ -19,7 +19,7 @@ const MIN_CLEANUP_MEMORY: u64 = 5 * 1024 * 1024 * 1024;
 
 pub struct MyVisitor<'a> {
     db: &'a DB,
-    pub san_tree: Trie<String, GameStats>,
+    pub san_tree: Trie<String, GameWins>,
     pub san_string: String,
     pub winner: Option<Color>,
     pub sys: System,
@@ -98,17 +98,17 @@ impl Visitor for MyVisitor<'_> { // '_ lifetime
                 Some(Color::White) => self.san_tree.map_with_default(
                     s,
                     |x| x.white += 1,
-                    GameStats { black: 0, white: 1, draw: 0}
+                    GameWins { black: 0, white: 1, draw: 0}
                 ),
                 Some(Color::Black) => self.san_tree.map_with_default(
                     s,
                     |x| x.black += 1,
-                    GameStats { black: 1, white: 0, draw: 0}
+                    GameWins { black: 1, white: 0, draw: 0}
                 ),
                 None => self.san_tree.map_with_default(
                     s,
                     |x| x.draw += 1,
-                    GameStats { black: 0, white: 0, draw: 1}
+                    GameWins { black: 0, white: 0, draw: 1}
                 ),
             }
             if self.sys.available_memory() < MIN_CLEANUP_MEMORY {

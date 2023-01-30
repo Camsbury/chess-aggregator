@@ -1,4 +1,4 @@
-use game_stats::GameStats;
+use game_stats::GameWins;
 use nibble_vec::Nibblet;
 use radix_trie::{Trie, SubTrie, TrieCommon};
 use rocksdb::{DB, WriteBatch};
@@ -7,8 +7,8 @@ use chess_db;
 
 const SEPARATOR: u8 = 32;
 
-type StatsTree = Trie<String, GameStats>;
-type StatsST<'a> = SubTrie<'a, String, GameStats>;
+type StatsTree = Trie<String, GameWins>;
+type StatsST<'a> = SubTrie<'a, String, GameWins>;
 
 #[derive(Debug, Clone)]
 struct Game {
@@ -53,7 +53,7 @@ impl TraversalStep<'_> {
 
 pub fn extract_stats(
     db: &DB,
-    tree: &mut Trie<String, GameStats>
+    tree: &mut Trie<String, GameWins>
 ) {
     let tree = std::mem::take(tree); // Clearing out the tree for later use
     let mut batch = WriteBatch::default();
@@ -107,7 +107,7 @@ pub fn extract_stats(
             if let Some(game_stats) = child.value() {
                 let mut move_may: Option<Move> = None;
                 for game in game_stack.iter().rev() {
-                    chess_db::update_pos_stats(
+                    chess_db::update_pos_wins(
                         db,
                         &mut batch,
                         game.position.clone(),

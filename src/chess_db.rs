@@ -1,5 +1,5 @@
 use std::convert::TryInto;
-use game_stats::GameStats;
+use game_stats::GameWins;
 use rocksdb::{DB, WriteBatch};
 use shakmaty::{fen::Epd, EnPassantMode, Chess, Move};
 
@@ -13,26 +13,26 @@ fn pos_to_fen(
     Epd::from_position(pos, EnPassantMode::Legal).to_string()
 }
 
-pub fn get_pos_stats(
+pub fn get_pos_wins(
     db: &DB,
     pos: &Chess,
-) -> Option<GameStats> {
+) -> Option<GameWins> {
     let fen = pos_to_fen(pos.clone());
     if let Ok(Some(bytes)) = db.get(PS.to_owned() + &fen) {
-        Some(GameStats::from_bytes(bytes))
+        Some(GameWins::from_bytes(bytes))
     } else {
         None
     }
 }
 
-pub fn update_pos_stats(
+pub fn update_pos_wins(
     db: &DB,
     batch: &mut WriteBatch,
     pos: Chess,
-    game_stats: GameStats,
+    game_stats: GameWins,
 ) {
     let fen = pos_to_fen(pos.clone());
-    if let Some(db_stats) = get_pos_stats(db, &pos) {
+    if let Some(db_stats) = get_pos_wins(db, &pos) {
         batch.put(PS.to_owned() + &fen, db_stats.combine(&game_stats).to_bytes())
     } else {
         batch.put(PS.to_owned() + &fen, game_stats.to_bytes())

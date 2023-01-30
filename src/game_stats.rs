@@ -1,15 +1,15 @@
 use std::convert::TryInto;
 
 #[derive(Debug, Copy, Clone)]
-pub struct GameStats {
+pub struct GameWins {
     pub black: u32,
     pub white: u32,
     pub draw:  u32,
 }
 
-impl GameStats {
-    pub fn new() -> GameStats {
-        GameStats {
+impl GameWins {
+    pub fn new() -> GameWins {
+        GameWins {
             black: 0,
             white: 0,
             draw: 0,
@@ -25,16 +25,16 @@ impl GameStats {
     }
 
         // TODO: much unsafety - means erroneous DB data
-    pub fn from_bytes(bytes: Vec<u8>) -> GameStats {
-        GameStats {
+    pub fn from_bytes(bytes: Vec<u8>) -> GameWins {
+        GameWins {
             black: u32::from_be_bytes(bytes[..4].try_into().unwrap()),
             white: u32::from_be_bytes(bytes[4..8].try_into().unwrap()),
             draw:  u32::from_be_bytes(bytes[8..12].try_into().unwrap()),
         }
     }
 
-    pub fn combine(self, other: &GameStats) -> GameStats {
-        GameStats {
+    pub fn combine(self, other: &GameWins) -> GameWins {
+        GameWins {
             black: self.black + other.black,
             white: self.white + other.white,
             draw: self.draw + other.draw,
@@ -46,7 +46,7 @@ impl GameStats {
     }
 }
 
-impl Default for GameStats {
+impl Default for GameWins {
     fn default() -> Self {
         Self::new()
     }
