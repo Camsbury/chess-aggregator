@@ -61,18 +61,11 @@ fn main() {
             &mut visitor.san_tree,
         );
         let starting_pos = Chess::new();
-        if let Some(stats) = chess_db::get_pos_wins(
+        if let Some(stats) = chess_db::get_pos_stats(
             &db,
             &starting_pos,
         ) {
             dbg!("Starting stats: {}", &stats);
-        }
-        if let Some(count) = chess_db::get_pos_move(
-            &db,
-            &starting_pos,
-            San::from_ascii("e4".as_bytes()).unwrap().to_move(&starting_pos).unwrap(),
-        ) {
-            println!("e4 played {count} times!");
         }
     }
 }
