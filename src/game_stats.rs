@@ -1,6 +1,8 @@
 use std::convert::TryInto;
+use std::collections::HashMap;
+use shakmaty::Move;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct GameWins {
     pub black: u32,
     pub white: u32,
@@ -46,8 +48,17 @@ impl GameWins {
     }
 }
 
-impl Default for GameWins {
-    fn default() -> Self {
-        Self::new()
+#[derive(Debug, Clone, Default)]
+pub struct GameStats {
+    pub game_wins: GameWins,
+    pub game_moves: HashMap<Move, u32>,
+}
+
+impl GameStats {
+    pub fn new() -> GameStats {
+        GameStats {
+            game_wins: GameWins::new(),
+            game_moves: HashMap::new(),
+        }
     }
 }

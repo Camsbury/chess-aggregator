@@ -1,5 +1,5 @@
 use std::convert::TryInto;
-use game_stats::GameWins;
+use game_stats::{GameWins, GameStats};
 use rocksdb::{DB, WriteBatch};
 use shakmaty::{fen::Epd, EnPassantMode, Chess, Move};
 
@@ -11,6 +11,13 @@ fn pos_to_fen(
     pos: Chess
 ) -> String {
     Epd::from_position(pos, EnPassantMode::Legal).to_string()
+}
+
+pub fn get_pos_stats(
+    db: &DB,
+    pos: &Chess,
+) -> Option<GameStats> {
+    Some(GameStats::new())
 }
 
 pub fn get_pos_wins(
