@@ -51,7 +51,7 @@ impl GameWins {
 #[derive(Debug, Clone, Default)]
 pub struct GameStats {
     pub game_wins: GameWins,
-    pub game_moves: HashMap<Move, u32>,
+    pub game_moves: HashMap<Move, GameWins>,
 }
 
 impl GameStats {

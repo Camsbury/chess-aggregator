@@ -114,12 +114,12 @@ pub fn extract_stats(
                         *game_stats,
                     );
                     if let Some(m) = move_may.clone() {
-                        chess_db::update_pos_move(
+                        chess_db::update_pos_move_wins(
                             db,
                             &mut batch,
                             game.position.clone(),
                             m,
-                            game_stats.total()
+                            *game_stats,
                         )
                     }
                     move_may = game.game_move.clone();

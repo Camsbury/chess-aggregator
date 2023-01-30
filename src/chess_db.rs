@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::convert::TryInto;
 use game_stats::{GameWins, GameStats};
 use rocksdb::{DB, WriteBatch};
 use shakmaty::{uci::Uci, fen::Epd, CastlingMode, EnPassantMode, Chess, Move};
@@ -69,8 +68,8 @@ pub fn get_pos_stats(
             key_clone,
             &prefix_clone,
         ).to_move(pos).expect("The move is invalid uci for the position!");
-        let count = u32::from_be_bytes(value[..4].try_into().expect("The count is not encoded correctly for this move!!"));
-        game_moves.insert(m, count);
+        let game_wins = GameWins::from_bytes(value.to_vec());
+        game_moves.insert(m, game_wins);
     }
 
     get_pos_wins(db, pos).map(
@@ -96,43 +95,43 @@ pub fn update_pos_wins(
     db: &DB,
     batch: &mut WriteBatch,
     pos: Chess,
-    game_stats: GameWins,
+    game_wins: GameWins,
 ) {
     let key = pos_to_key(pos.clone());
     if let Some(db_stats) = get_pos_wins(db, &pos) {
-        batch.put(key, db_stats.combine(&game_stats).to_bytes())
+        batch.put(key, db_stats.combine(&game_wins).to_bytes())
     } else {
-        batch.put(key, game_stats.to_bytes())
+        batch.put(key, game_wins.to_bytes())
     }
 }
 
-pub fn get_pos_move(
+pub fn get_pos_move_wins(
     db: &DB,
     pos: &Chess,
     chess_move: Move,
-) -> Option<u32> {
+) -> Option<GameWins> {
     let key = pos_move_to_key(pos.clone(), chess_move);
     if let Ok(Some(bytes)) = db.get(key) {
         // TODO: much unsafety - means erroneous DB data
-        Some(u32::from_be_bytes(bytes[..4].try_into().unwrap()))
+        Some(GameWins::from_bytes(bytes))
     } else {
         None
     }
 
 }
 
-pub fn update_pos_move(
+pub fn update_pos_move_wins(
     db: &DB,
     batch: &mut WriteBatch,
     pos: Chess,
     chess_move: Move, // TODO: check that to_string is reasonable
-    count: u32,
+    game_wins: GameWins,
 ) {
     let key = pos_move_to_key(pos.clone(), chess_move.clone());
-    if let Some(db_count) = get_pos_move(db, &pos, chess_move) {
-        batch.put(key, (db_count + count).to_be_bytes());
+    if let Some(db_wins) = get_pos_move_wins(db, &pos, chess_move) {
+        batch.put(key, db_wins.combine(&game_wins).to_bytes());
     } else {
-        batch.put(key, count.to_be_bytes());
+        batch.put(key, game_wins.to_bytes());
     }
 }
 
