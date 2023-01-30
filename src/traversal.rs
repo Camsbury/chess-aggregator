@@ -1,8 +1,9 @@
 use game_stats::GameStats;
 use nibble_vec::Nibblet;
 use radix_trie::{Trie, SubTrie, TrieCommon};
+use rocksdb::{DB, WriteBatch};
 use shakmaty::{Chess, Position, san::San, Move};
-use std::collections::HashMap;
+use chess_db;
 
 const SEPARATOR: u8 = 32;
 
@@ -51,11 +52,12 @@ impl TraversalStep<'_> {
 }
 
 pub fn extract_stats(
-    tree: Trie<String, GameStats>
-) -> HashMap<Chess, GameStats> {
+    db: &DB,
+    tree: &mut Trie<String, GameStats>
+) {
+    let tree = std::mem::take(tree); // Clearing out the tree for later use
+    let mut batch = WriteBatch::default();
     let mut stack = vec![TraversalStep::new(&tree)];
-    let mut pos_stats: HashMap<Chess, GameStats> = HashMap::new();
-    let mut pos_moves: HashMap<Chess, HashMap<Move, u32>> = HashMap::new();
     while !stack.is_empty() {
         let step = stack.pop().unwrap();
         for child in step.tree.children() {
@@ -105,30 +107,20 @@ pub fn extract_stats(
             if let Some(game_stats) = child.value() {
                 let mut move_may: Option<Move> = None;
                 for game in game_stack.iter().rev() {
-                    let base_stats = match pos_stats.get(&game.position) {
-                        Some(stats) => *stats,
-                        None => GameStats::new(),
-                    };
-                    // insert wins by color
-                    pos_stats.insert(game.position.clone(), base_stats.combine(game_stats));
-
-                    // insert moves by position
+                    chess_db::update_pos_stats(
+                        db,
+                        &mut batch,
+                        game.position.clone(),
+                        *game_stats,
+                    );
                     if let Some(m) = move_may.clone() {
-                        match pos_moves.get_mut(&game.position) {
-                            Some(move_counts) => match move_counts.get_mut(&m) {
-                                Some(count) => {
-                                    *count += game_stats.total();
-                                }
-                                None => {
-                                    let m_clone = m.clone();
-                                    move_counts.insert(m_clone, game_stats.total());
-                                }
-                            }
-                            None => {
-                                let pos_clone = game.position.clone();
-                                pos_moves.insert(pos_clone, HashMap::from([(m, game_stats.total())]));
-                            }
-                        }
+                        chess_db::update_pos_move(
+                            db,
+                            &mut batch,
+                            game.position.clone(),
+                            m,
+                            game_stats.total()
+                        )
                     }
                     move_may = game.game_move.clone();
                 }
@@ -142,5 +134,5 @@ pub fn extract_stats(
             ));
         }
     }
-    pos_stats
+    db.write(batch).ok().unwrap(); //TODO: error handling
 }

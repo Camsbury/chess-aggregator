@@ -10,10 +10,12 @@ extern crate zstd;
 pub mod visitor;
 pub mod traversal;
 pub mod game_stats;
+pub mod chess_db;
+
+use shakmaty::{Chess, san::San};
 
 use pgn_reader::BufferedReader;
-use shakmaty::{EnPassantMode, fen::Fen};
-// use rocksdb::{Options, DB, WriteBatch};
+use rocksdb::{Options, DB};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use zstd::stream::read::Decoder;
@@ -32,10 +34,10 @@ fn main() {
         }
     };
 
-    // let db_path = &args[1];
-    // let mut db_opts = Options::default();
-    // db_opts.create_if_missing(true);
-    // let db = DB::open(&db_opts, db_path).unwrap();
+    let db_path = &args[1];
+    let mut db_opts = Options::default();
+    db_opts.create_if_missing(true);
+    let db = DB::open(&db_opts, db_path).unwrap();
 
     let reader = BufReader::new(file);
     for line in reader.lines() {
@@ -50,19 +52,22 @@ fn main() {
         };
         let decoder = Decoder::new(file).unwrap();
         let mut buffered = BufferedReader::new(decoder);
-        // let mut batch = WriteBatch::default();
-        let mut visitor = visitor::MyVisitor::new(
-            // &db,
-            // &mut batch,
-        );
+        let mut visitor = visitor::MyVisitor::new(&db);
         if let Err(err) = buffered.read_all(&mut visitor) {
             panic!("Failed to read games: {:?}", err);
         }
-        let pos_stats = traversal::extract_stats(visitor.san_tree);
-        // for (k, v) in pos_stats.iter().take(5) {
-        //     println!("Key: {}", Fen::from_position(k.clone(), EnPassantMode::Always));
-        //     dbg!("Val: {}", v);
-        // }
+        traversal::extract_stats(
+            &db,
+            &mut visitor.san_tree,
+        );
+        let starting_pos = Chess::new();
+        if let Some(count) = chess_db::get_pos_move(
+            &db,
+            &starting_pos,
+            San::from_ascii("e4".as_bytes()).unwrap().to_move(&starting_pos).unwrap(),
+        ) {
+            println!("e4 played {count} times!");
+        }
     }
 }
 

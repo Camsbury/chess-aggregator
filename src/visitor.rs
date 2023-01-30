@@ -7,16 +7,18 @@ use pgn_reader::{
     Skip,
     Visitor,
 };
-use radix_trie::{Trie};
+use radix_trie::Trie;
+use rocksdb::DB;
 use sysinfo::{System, SystemExt};
 use game_stats::GameStats;
+use traversal;
 
 const MIN_RATING: u32 = 2000;
 const MIN_PLY_COUNT: u32 = 7;
+const MIN_CLEANUP_MEMORY: u64 = 5 * 1024 * 1024 * 1024;
 
-pub struct MyVisitor { // 'a lifetime
-    // db: &'a DB,
-    // batch: &'a mut WriteBatch,
+pub struct MyVisitor<'a> {
+    db: &'a DB,
     pub san_tree: Trie<String, GameStats>,
     pub san_string: String,
     pub winner: Option<Color>,
@@ -25,14 +27,12 @@ pub struct MyVisitor { // 'a lifetime
     pub ply_count: u32,
 }
 
-impl MyVisitor { // this one had _ lifetime
-    pub fn new<'a>(
-        // db: &'a DB,
-        // batch: &'a mut WriteBatch,
-    ) -> MyVisitor { // this one had a lifetime
+impl MyVisitor<'_> {
+    pub fn new(
+        db: &DB,
+    ) -> MyVisitor {
         MyVisitor {
-            // db,
-            // batch,
+            db,
             san_tree: Trie::default(),
             san_string: String::new(),
             winner: None,
@@ -43,7 +43,7 @@ impl MyVisitor { // this one had _ lifetime
     }
 }
 
-impl Visitor for MyVisitor { // '_ lifetime
+impl Visitor for MyVisitor<'_> { // '_ lifetime
     type Result = ();
 
     fn begin_headers(&mut self) {
@@ -84,10 +84,6 @@ impl Visitor for MyVisitor { // '_ lifetime
     fn san(&mut self, san_plus: SanPlus) {
         self.ply_count += 1;
         self.san_string.push_str(&format!(" {}", san_plus.san));
-        // self.batch.put([1], [1]);
-        // if self.batch.size_in_bytes() > 200 * 1024 * 1024 {
-        //     self.db.write(std::mem::take(self.batch)).ok().unwrap();
-        // }
     }
 
     fn begin_variation(&mut self) -> Skip {
@@ -98,7 +94,6 @@ impl Visitor for MyVisitor { // '_ lifetime
         if self.ply_count > MIN_PLY_COUNT {
             let s = std::mem::take(&mut self.san_string);
             self.sys.refresh_memory();
-            self.sys.available_memory();
             match self.winner {
                 Some(Color::White) => self.san_tree.map_with_default(
                     s,
@@ -116,6 +111,10 @@ impl Visitor for MyVisitor { // '_ lifetime
                     GameStats { black: 0, white: 0, draw: 1}
                 ),
             }
+            if self.sys.available_memory() < MIN_CLEANUP_MEMORY {
+                traversal::extract_stats(self.db, &mut self.san_tree);
+            }
+
         }
     }
 }
