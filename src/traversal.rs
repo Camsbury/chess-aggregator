@@ -1,9 +1,9 @@
+use crate::chess_db;
 use crate::game_stats::GameWins;
 use nibble_vec::Nibblet;
-use radix_trie::{Trie, SubTrie, TrieCommon};
-use rocksdb::{DB, WriteBatch};
-use shakmaty::{Chess, Position, san::San, Move};
-use crate::chess_db;
+use radix_trie::{SubTrie, Trie, TrieCommon};
+use rocksdb::{WriteBatch, DB};
+use shakmaty::{san::San, Chess, Move, Position};
 
 const SEPARATOR: u8 = 32;
 
@@ -25,22 +25,17 @@ struct TraversalStep<'a> {
 
 impl TraversalStep<'_> {
     fn new(tree: &Trie<String, GameWins>) -> Option<TraversalStep> {
-        match tree.children().next() {
-            Some(child) => {
-                let prefix = child.prefix().clone();
-                Some(Self::build_step(
-                    child,
-                    vec![Game{ position: Chess::new(), game_move: None}],
-                    prefix,
-                    0,
-                ))
-            }
-            None => {
-                println!("Attempted to start a traversal without any children!");
-                dbg!({}, tree);
-                None
-            }
-        }
+        let child = tree.children().next()?;
+        let prefix = child.prefix().clone();
+        Some(Self::build_step(
+            child,
+            vec![Game {
+                position: Chess::new(),
+                game_move: None,
+            }],
+            prefix,
+            0,
+        ))
     }
 
     fn build_step(
@@ -58,15 +53,12 @@ impl TraversalStep<'_> {
     }
 }
 
-pub fn extract_stats(
-    db: &DB,
-    tree: &mut Trie<String, GameWins>
-) {
+pub fn extract_stats(db: &DB, tree: &mut Trie<String, GameWins>) {
     let tree = std::mem::take(tree); // Clearing out the tree for later use
     let mut batch = WriteBatch::default();
     let mut stack = match TraversalStep::new(&tree) {
         Some(step) => vec![step],
-        None       => vec![],
+        None => vec![],
     };
     while !stack.is_empty() {
         let step = stack.pop().unwrap();
@@ -79,20 +71,23 @@ pub fn extract_stats(
             // TODO: write with and_then!
             if let Some(end) = new_offset {
                 if end > step.offset {
-                    if let Ok(moves_string) = String::from_utf8(
-                        prefix_vec[step.offset..end].to_vec()
-                    ) {
+                    if let Ok(moves_string) =
+                        String::from_utf8(prefix_vec[step.offset..end].to_vec())
+                    {
                         for m_str in moves_string.split_whitespace() {
                             if let Some(Game {
                                 position: new_pos,
                                 game_move: _,
-                            }) = game_stack.last() {
+                            }) = game_stack.last()
+                            {
                                 let san_may: Result<San, _> = m_str.parse();
                                 if let Ok(san_move) = san_may {
                                     let move_may: Result<Move, _> =
                                         san_move.to_move(&new_pos.clone());
                                     if let Ok(m) = move_may {
-                                        if let Ok(new_pos) = new_pos.clone().play(&m) {
+                                        if let Ok(new_pos) =
+                                            new_pos.clone().play(&m)
+                                        {
                                             game_stack.push(Game {
                                                 position: new_pos,
                                                 game_move: Some(m),

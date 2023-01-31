@@ -12,6 +12,7 @@ in with pkgs; mkShell {
   shellHooks = ''
     export CARGO_PATH=${cargo}/bin/cargo
     export RUST_ANALYZER=${rust-analyzer}/bin/rust-analyzer
+    export RUSTFMT_PATH=${rustup}/bin/rustfmt
     export LIBCLANG_PATH="${llvmPackages.libclang.lib}/lib"
   '';
 }

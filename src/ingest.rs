@@ -6,10 +6,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use zstd::stream::read::Decoder;
 
-pub fn ingest(
-    filename: &str,
-    db_path: &str
-) {
+pub fn ingest(filename: &str, db_path: &str) {
     let file = match File::open(filename) {
         Ok(file) => file,
         Err(err) => {
@@ -38,9 +35,6 @@ pub fn ingest(
         if let Err(err) = buffered.read_all(&mut visitor) {
             panic!("Failed to read games: {:?}", err);
         }
-        traversal::extract_stats(
-            &db,
-            &mut visitor.san_tree,
-        );
+        traversal::extract_stats(&db, &mut visitor.san_tree);
     }
 }

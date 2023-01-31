@@ -1,21 +1,16 @@
+use crate::game_stats::{GameStats, GameWins};
+use rocksdb::{WriteBatch, DB};
+use shakmaty::{fen::Epd, uci::Uci, CastlingMode, Chess, EnPassantMode, Move};
 use std::collections::HashMap;
-use crate::game_stats::{GameWins, GameStats};
-use rocksdb::{DB, WriteBatch};
-use shakmaty::{uci::Uci, fen::Epd, CastlingMode, EnPassantMode, Chess, Move};
 
 const PS: &str = "position_stats";
 const PMC: &str = "position_move_count";
 
-
-fn pos_to_fen(
-    pos: Chess
-) -> String {
+fn pos_to_fen(pos: Chess) -> String {
     Epd::from_position(pos, EnPassantMode::Legal).to_string()
 }
 
-fn pos_to_key(
-    pos: Chess,
-) -> String {
+fn pos_to_key(pos: Chess) -> String {
     let fen = pos_to_fen(pos);
     PS.to_owned() + &fen
 }
@@ -25,35 +20,30 @@ fn pos_to_prefix(pos: Chess) -> String {
     PMC.to_owned() + &fen
 }
 
-fn pos_move_to_key(
-    pos: Chess,
-    chess_move: Move,
-) -> String {
-    (pos_to_prefix(pos)) + &chess_move.to_uci(CastlingMode::Standard).to_string()
+fn pos_move_to_key(pos: Chess, chess_move: Move) -> String {
+    (pos_to_prefix(pos))
+        + &chess_move.to_uci(CastlingMode::Standard).to_string()
 }
 
-fn key_to_uci(
-    key: Vec<u8>,
-    prefix: &str,
-) -> Uci {
-    let key_string = String::from_utf8(key).expect("Key isn't decoding to UTF-8 correctly");
-    let move_string: String = key_string.chars().into_iter().skip(prefix.chars().count()).collect();
-    Uci::from_ascii(move_string.as_bytes()).expect("Failed to parse UCI from key")
+fn key_to_uci(key: Vec<u8>, prefix: &str) -> Uci {
+    let key_string =
+        String::from_utf8(key).expect("Key isn't decoding to UTF-8 correctly");
+    let move_string: String = key_string
+        .chars()
+        .into_iter()
+        .skip(prefix.chars().count())
+        .collect();
+    Uci::from_ascii(move_string.as_bytes())
+        .expect("Failed to parse UCI from key")
 }
 
-
-fn is_valid_prefix(
-    key: &[u8],
-    prefix: &str,
-) -> bool {
-    let key_string = String::from_utf8(key.to_owned()).expect("Key isn't decoding to UTF-8 correctly");
+fn is_valid_prefix(key: &[u8], prefix: &str) -> bool {
+    let key_string = String::from_utf8(key.to_owned())
+        .expect("Key isn't decoding to UTF-8 correctly");
     key_string.starts_with(prefix)
 }
 
-pub fn get_pos_stats(
-    db: &DB,
-    pos: &Chess,
-) -> Option<GameStats> {
+pub fn get_pos_stats(db: &DB, pos: &Chess) -> Option<GameStats> {
     let prefix = pos_to_prefix(pos.clone());
     let prefix_clone = prefix.clone();
     let prefix_iter = db.prefix_iterator(prefix);
@@ -65,27 +55,21 @@ pub fn get_pos_stats(
         if !is_valid_prefix(&key_clone, &prefix_clone) {
             break;
         }
-        let m = key_to_uci(
-            key_clone,
-            &prefix_clone,
-        ).to_move(pos).expect("The move is invalid uci for the position!");
+        let m = key_to_uci(key_clone, &prefix_clone)
+            .to_move(pos)
+            .expect("The move is invalid uci for the position!");
         let game_wins = GameWins::from_bytes(value.to_vec());
         let uci = m.to_uci(CastlingMode::Standard).to_string();
         game_moves.insert(uci, game_wins);
     }
 
-    get_pos_wins(db, pos).map(
-        |game_wins| GameStats {
-            game_wins,
-            game_moves,
-        }
-    )
+    get_pos_wins(db, pos).map(|game_wins| GameStats {
+        game_wins,
+        game_moves,
+    })
 }
 
-pub fn get_pos_wins(
-    db: &DB,
-    pos: &Chess,
-) -> Option<GameWins> {
+pub fn get_pos_wins(db: &DB, pos: &Chess) -> Option<GameWins> {
     if let Ok(Some(bytes)) = db.get(pos_to_key(pos.clone())) {
         Some(GameWins::from_bytes(bytes))
     } else {
@@ -119,7 +103,6 @@ pub fn get_pos_move_wins(
     } else {
         None
     }
-
 }
 
 pub fn update_pos_move_wins(
@@ -136,4 +119,3 @@ pub fn update_pos_move_wins(
         batch.put(key, game_wins.to_bytes());
     }
 }
-

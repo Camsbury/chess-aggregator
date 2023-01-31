@@ -1,17 +1,10 @@
+use crate::game_stats::GameWins;
+use crate::traversal;
 use btoi;
-use pgn_reader::{
-    Color,
-    Outcome,
-    RawHeader,
-    SanPlus,
-    Skip,
-    Visitor,
-};
+use pgn_reader::{Color, Outcome, RawHeader, SanPlus, Skip, Visitor};
 use radix_trie::Trie;
 use rocksdb::DB;
 use sysinfo::{System, SystemExt};
-use crate::game_stats::GameWins;
-use crate::traversal;
 
 const MIN_RATING: u32 = 1800;
 const MIN_PLY_COUNT: u32 = 7;
@@ -28,9 +21,7 @@ pub struct MyVisitor<'a> {
 }
 
 impl MyVisitor<'_> {
-    pub fn new(
-        db: &DB,
-    ) -> MyVisitor {
+    pub fn new(db: &DB) -> MyVisitor {
         MyVisitor {
             db,
             san_tree: Trie::default(),
@@ -43,7 +34,8 @@ impl MyVisitor<'_> {
     }
 }
 
-impl Visitor for MyVisitor<'_> { // '_ lifetime
+impl Visitor for MyVisitor<'_> {
+    // '_ lifetime
     type Result = ();
 
     fn begin_headers(&mut self) {
@@ -56,8 +48,10 @@ impl Visitor for MyVisitor<'_> { // '_ lifetime
                 self.skip_game = true;
             } else {
                 match btoi::btoi::<u32>(value.as_bytes()) {
-                    Ok(rating) => if rating < MIN_RATING {
-                        self.skip_game = true;
+                    Ok(rating) => {
+                        if rating < MIN_RATING {
+                            self.skip_game = true;
+                        }
                     }
                     _ => self.skip_game = true,
                 }
@@ -98,23 +92,34 @@ impl Visitor for MyVisitor<'_> { // '_ lifetime
                 Some(Color::White) => self.san_tree.map_with_default(
                     s,
                     |x| x.white += 1,
-                    GameWins { black: 0, white: 1, draw: 0}
+                    GameWins {
+                        black: 0,
+                        white: 1,
+                        draw: 0,
+                    },
                 ),
                 Some(Color::Black) => self.san_tree.map_with_default(
                     s,
                     |x| x.black += 1,
-                    GameWins { black: 1, white: 0, draw: 0}
+                    GameWins {
+                        black: 1,
+                        white: 0,
+                        draw: 0,
+                    },
                 ),
                 None => self.san_tree.map_with_default(
                     s,
                     |x| x.draw += 1,
-                    GameWins { black: 0, white: 0, draw: 1}
+                    GameWins {
+                        black: 0,
+                        white: 0,
+                        draw: 1,
+                    },
                 ),
             }
             if self.sys.available_memory() < MIN_CLEANUP_MEMORY {
                 traversal::extract_stats(self.db, &mut self.san_tree);
             }
-
         }
     }
 }

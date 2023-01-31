@@ -1,12 +1,12 @@
-use std::convert::TryInto;
+use serde::Serialize;
 use std::collections::HashMap;
-use serde::{Serialize};
+use std::convert::TryInto;
 
 #[derive(Debug, Copy, Clone, Default, Serialize)]
 pub struct GameWins {
     pub black: u32,
     pub white: u32,
-    pub draw:  u32,
+    pub draw: u32,
 }
 
 impl GameWins {
@@ -23,15 +23,18 @@ impl GameWins {
             self.black.to_be_bytes(),
             self.white.to_be_bytes(),
             self.draw.to_be_bytes(),
-        ].iter().flat_map(|s| s.iter().copied()).collect()
+        ]
+        .iter()
+        .flat_map(|s| s.iter().copied())
+        .collect()
     }
 
-        // TODO: much unsafety - means erroneous DB data
+    // TODO: much unsafety - means erroneous DB data
     pub fn from_bytes(bytes: Vec<u8>) -> GameWins {
         GameWins {
             black: u32::from_be_bytes(bytes[..4].try_into().unwrap()),
             white: u32::from_be_bytes(bytes[4..8].try_into().unwrap()),
-            draw:  u32::from_be_bytes(bytes[8..12].try_into().unwrap()),
+            draw: u32::from_be_bytes(bytes[8..12].try_into().unwrap()),
         }
     }
 
