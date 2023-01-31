@@ -13,7 +13,7 @@ use sysinfo::{System, SystemExt};
 use crate::game_stats::GameWins;
 use crate::traversal;
 
-const MIN_RATING: u32 = 2000;
+const MIN_RATING: u32 = 1800;
 const MIN_PLY_COUNT: u32 = 7;
 const MIN_CLEANUP_MEMORY: u64 = 5 * 1024 * 1024 * 1024;
 
