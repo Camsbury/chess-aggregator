@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use game_stats::{GameWins, GameStats};
+use crate::game_stats::{GameWins, GameStats};
 use rocksdb::{DB, WriteBatch};
 use shakmaty::{uci::Uci, fen::Epd, CastlingMode, EnPassantMode, Chess, Move};
 
@@ -41,6 +41,7 @@ fn key_to_uci(
     Uci::from_ascii(move_string.as_bytes()).expect("Failed to parse UCI from key")
 }
 
+
 fn is_valid_prefix(
     key: &[u8],
     prefix: &str,
@@ -69,7 +70,8 @@ pub fn get_pos_stats(
             &prefix_clone,
         ).to_move(pos).expect("The move is invalid uci for the position!");
         let game_wins = GameWins::from_bytes(value.to_vec());
-        game_moves.insert(m, game_wins);
+        let uci = m.to_uci(CastlingMode::Standard).to_string();
+        game_moves.insert(uci, game_wins);
     }
 
     get_pos_wins(db, pos).map(

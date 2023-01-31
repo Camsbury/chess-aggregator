@@ -1,14 +1,19 @@
 [package]
 name = "chess-aggregator"
 version = "0.1.0"
+edition = "2021"
 
 [dependencies]
+actix-web = "4.3.0"
+axum = "0.6.4"
 btoi = "0.4.2"
 chess = "3.2.0"
 nibble_vec = "0.1.0"
 pgn-reader = "0.22.0"
 radix_trie = "0.2.1"
 rocksdb = "0.19.0"
+serde = { version = "1.0.152", features = ["derive"]}
+serde_json = "1.0.91"
 shakmaty = "0.23.0"
 sysinfo = "0.27.7"
 zstd = "0.12.2"

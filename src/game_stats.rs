@@ -1,8 +1,8 @@
 use std::convert::TryInto;
 use std::collections::HashMap;
-use shakmaty::Move;
+use serde::{Serialize};
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default, Serialize)]
 pub struct GameWins {
     pub black: u32,
     pub white: u32,
@@ -48,10 +48,10 @@ impl GameWins {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Debug, Default, Serialize)]
 pub struct GameStats {
     pub game_wins: GameWins,
-    pub game_moves: HashMap<Move, GameWins>,
+    pub game_moves: HashMap<String, GameWins>,
 }
 
 impl GameStats {

@@ -10,8 +10,8 @@ use pgn_reader::{
 use radix_trie::Trie;
 use rocksdb::DB;
 use sysinfo::{System, SystemExt};
-use game_stats::GameWins;
-use traversal;
+use crate::game_stats::GameWins;
+use crate::traversal;
 
 const MIN_RATING: u32 = 2000;
 const MIN_PLY_COUNT: u32 = 7;

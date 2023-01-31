@@ -1,72 +1,48 @@
+extern crate actix_web;
 extern crate btoi;
 extern crate nibble_vec;
 extern crate pgn_reader;
 extern crate radix_trie;
 extern crate rocksdb;
+extern crate serde;
 extern crate shakmaty;
 extern crate sysinfo;
 extern crate zstd;
 
-pub mod visitor;
-pub mod traversal;
-pub mod game_stats;
 pub mod chess_db;
-
-use shakmaty::{Chess, san::San};
-
-use pgn_reader::BufferedReader;
-use rocksdb::{Options, DB};
-use std::fs::File;
-use std::io::{BufRead, BufReader};
-use zstd::stream::read::Decoder;
+pub mod game_stats;
+pub mod ingest;
+pub mod server;
+pub mod traversal;
+pub mod visitor;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 3 {
-        println!("Usage: {} <db_path> <file_paths_file>", args[0]);
+
+    if args.len() < 2 {
+        println!("Usage: {} ingest or {} serve", args[0], args[0]);
         std::process::exit(1);
     }
-    let filename = &args[2];
-    let file = match File::open(filename) {
-        Ok(file) => file,
-        Err(err) => {
-            panic!("Failed to open file listing .pgn.zst files: {:?}", err);
-        }
-    };
 
-    let db_path = &args[1];
-    let mut db_opts = Options::default();
-    db_opts.create_if_missing(true);
-    let db = DB::open(&db_opts, db_path).unwrap();
-
-    let reader = BufReader::new(file);
-    for line in reader.lines() {
-        let compressed_pgn_file = line.unwrap();
-        println!("Processing file: {}", compressed_pgn_file);
-        let file = match File::open(&compressed_pgn_file) {
-            Ok(file) => file,
-            Err(err) => {
-                println!("Failed to open .pgn.zst file: {:?}", err);
-                continue;
-            }
-        };
-        let decoder = Decoder::new(file).unwrap();
-        let mut buffered = BufferedReader::new(decoder);
-        let mut visitor = visitor::MyVisitor::new(&db);
-        if let Err(err) = buffered.read_all(&mut visitor) {
-            panic!("Failed to read games: {:?}", err);
+    if args[1] == "ingest" {
+        if args.len() != 3 {
+            println!("Usage: {} ingest <db_path> <file_paths_file>", args[0]);
+            std::process::exit(1);
         }
-        traversal::extract_stats(
-            &db,
-            &mut visitor.san_tree,
-        );
-        let starting_pos = Chess::new();
-        if let Some(stats) = chess_db::get_pos_stats(
-            &db,
-            &starting_pos,
-        ) {
-            dbg!("Starting stats: {}", &stats);
+        let db_path = &args[1];
+        let filename = &args[2];
+        ingest::ingest(filename, db_path);
+    } else if args[1] == "serve" {
+        if args.len() != 3 {
+            println!("Usage: {} serve <db_path>", args[0]);
+            std::process::exit(1);
         }
+        let db_path = args[1].to_string();
+        server::serve(db_path);
+    } else {
+        println!("Usage: {} ingest or {} serve", args[0], args[0]);
+        std::process::exit(1);
     }
+
 }
 

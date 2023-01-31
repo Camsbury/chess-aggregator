@@ -1,9 +1,9 @@
-use game_stats::GameWins;
+use crate::game_stats::GameWins;
 use nibble_vec::Nibblet;
 use radix_trie::{Trie, SubTrie, TrieCommon};
 use rocksdb::{DB, WriteBatch};
 use shakmaty::{Chess, Position, san::San, Move};
-use chess_db;
+use crate::chess_db;
 
 const SEPARATOR: u8 = 32;
 
