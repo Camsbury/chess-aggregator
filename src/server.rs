@@ -40,7 +40,7 @@ pub async fn serve(
     db_path: String
 ) -> std::io::Result<()> {
     let server = HttpServer::new(
-        || App::new()
+        move || App::new()
             .app_data(web::Data::new(AppState::new(db_path.clone())))
             .service(index)
     ).bind("127.0.0.1:9090").unwrap();

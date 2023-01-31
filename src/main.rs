@@ -38,7 +38,7 @@ fn main() {
             std::process::exit(1);
         }
         let db_path = args[1].to_string();
-        server::serve(db_path);
+        server::serve(db_path).unwrap();
     } else {
         println!("Usage: {} ingest or {} serve", args[0], args[0]);
         std::process::exit(1);
