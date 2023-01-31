@@ -1,6 +1,3 @@
-use shakmaty::Chess;
-
-use crate::chess_db;
 use crate::traversal;
 use crate::visitor;
 use pgn_reader::BufferedReader;
