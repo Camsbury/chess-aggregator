@@ -45,13 +45,5 @@ pub fn ingest(
             &db,
             &mut visitor.san_tree,
         );
-        // TODO: remove this introspection once the server looks good
-        let starting_pos = Chess::new();
-        if let Some(stats) = chess_db::get_pos_stats(
-            &db,
-            &starting_pos,
-        ) {
-            dbg!("Starting stats: {}", &stats);
-        }
     }
 }

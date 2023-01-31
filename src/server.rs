@@ -41,13 +41,3 @@ pub async fn serve(
 
     server.run().await
 }
-
-// stream
-//     .for_each_concurrent(None, |stream_item| {
-//         let a = a.clone();
-//         async move {
-//             println!("{}", a);
-//             println!("{}", stream_item);
-//         }
-//     })
-//     .await;
