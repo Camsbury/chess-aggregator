@@ -7,7 +7,6 @@ use crate::chess_db;
 
 const SEPARATOR: u8 = 32;
 
-type StatsTree = Trie<String, GameWins>;
 type StatsST<'a> = SubTrie<'a, String, GameWins>;
 
 #[derive(Debug, Clone)]
@@ -25,15 +24,23 @@ struct TraversalStep<'a> {
 }
 
 impl TraversalStep<'_> {
-    fn new(tree: &StatsTree) -> TraversalStep {
-        let child = tree.children().next().unwrap();
-        let prefix = child.prefix().clone();
-        Self::build_step(
-            child,
-            vec![Game{ position: Chess::new(), game_move: None}],
-            prefix,
-            0,
-        )
+    fn new(tree: &Trie<String, GameWins>) -> Option<TraversalStep> {
+        match tree.children().next() {
+            Some(child) => {
+                let prefix = child.prefix().clone();
+                Some(Self::build_step(
+                    child,
+                    vec![Game{ position: Chess::new(), game_move: None}],
+                    prefix,
+                    0,
+                ))
+            }
+            None => {
+                println!("Attempted to start a traversal without any children!");
+                dbg!({}, tree);
+                None
+            }
+        }
     }
 
     fn build_step(
@@ -57,7 +64,10 @@ pub fn extract_stats(
 ) {
     let tree = std::mem::take(tree); // Clearing out the tree for later use
     let mut batch = WriteBatch::default();
-    let mut stack = vec![TraversalStep::new(&tree)];
+    let mut stack = match TraversalStep::new(&tree) {
+        Some(step) => vec![step],
+        None       => vec![],
+    };
     while !stack.is_empty() {
         let step = stack.pop().unwrap();
         for child in step.tree.children() {
