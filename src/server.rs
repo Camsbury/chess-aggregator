@@ -11,16 +11,7 @@ struct Params {
 }
 
 struct AppState {
-    db: DB
-}
-
-impl AppState {
-    fn new(db_path: String) -> AppState {
-        let mut db_opts = Options::default();
-        db_opts.create_if_missing(true);
-        let db = DB::open(&db_opts, db_path).unwrap();
-        AppState {db}
-    }
+    db_path: String
 }
 
 #[get("/")]
@@ -29,9 +20,12 @@ async fn index(
     params: web::Query<Params>,
 ) -> impl Responder {
     //TODO: handle errors for all the following unwraps
+    let mut db_opts = Options::default();
+    db_opts.create_if_missing(true);
+    let db = DB::open(&db_opts, data.db_path.clone()).unwrap();
     let fen: Fen = params.fen.parse().unwrap();
     let pos: Chess = fen.into_position(CastlingMode::Standard).unwrap();
-    let stats: GameStats = chess_db::get_pos_stats(&data.db, &pos).unwrap();
+    let stats: GameStats = chess_db::get_pos_stats(&db, &pos).unwrap();
     web::Json(stats)
 }
 
@@ -41,7 +35,7 @@ pub async fn serve(
 ) -> std::io::Result<()> {
     let server = HttpServer::new(
         move || App::new()
-            .app_data(web::Data::new(AppState::new(db_path.clone())))
+            .app_data(web::Data::new(AppState{db_path: db_path.clone()}))
             .service(index)
     ).bind("127.0.0.1:9090").unwrap();
 
