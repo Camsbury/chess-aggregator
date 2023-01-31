@@ -25,19 +25,19 @@ fn main() {
     }
 
     if args[1] == "ingest" {
-        if args.len() != 3 {
+        if args.len() != 4 {
             println!("Usage: {} ingest <db_path> <file_paths_file>", args[0]);
             std::process::exit(1);
         }
-        let db_path = &args[1];
-        let filename = &args[2];
+        let db_path = &args[2];
+        let filename = &args[3];
         ingest::ingest(filename, db_path);
     } else if args[1] == "serve" {
         if args.len() != 3 {
             println!("Usage: {} serve <db_path>", args[0]);
             std::process::exit(1);
         }
-        let db_path = args[1].to_string();
+        let db_path = args[2].to_string();
         server::serve(db_path).unwrap();
     } else {
         println!("Usage: {} ingest or {} serve", args[0], args[0]);
