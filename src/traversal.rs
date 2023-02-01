@@ -57,9 +57,14 @@ fn extract_san_strs(step: &TraversalStep, node: &StatsST) -> (Nibblet, usize, Ve
     let prefix = step.prefix_acc.clone().join(node.prefix());
     let pre_offset_vec = &prefix.as_bytes().to_vec();
     let prefix_vec = &prefix.as_bytes().to_vec();
-    let new_offset =
-        prefix_vec.iter().rposition(|x| *x == SEPARATOR);
+    let new_offset = if !step.tree.is_leaf() && prefix_vec.last() == Some(&SEPARATOR) {
+        prefix_vec.iter().rev().skip(1).rev().rposition(|x| *x == SEPARATOR)
+    } else {
+        prefix_vec.iter().rposition(|x| *x == SEPARATOR)
+    };
 
+
+    // println!("\n\nEXTRACT MOVES\n");
     // println!("Prefix: {prefix:?}");
     // println!("Pre-offset Vec: {pre_offset_vec:?}");
     // println!("Prefix Vec: {prefix_vec:?}");
@@ -68,7 +73,17 @@ fn extract_san_strs(step: &TraversalStep, node: &StatsST) -> (Nibblet, usize, Ve
     if let Some(end) = new_offset {
         if end > step.offset {
             if let Ok(moves_string) = String::from_utf8(prefix_vec[step.offset..end].to_vec()) {
-                (prefix, end, moves_string.split_whitespace().map(|s| s.to_string()).collect())
+                let full_moves = String::from_utf8(prefix_vec.to_vec()).unwrap();
+                let san_strs: Vec<String> = moves_string.split_whitespace().map(|s| s.to_string()).collect();
+                // if full_moves.starts_with(" e4 c6 d4 d5 Nc3 dxe4 Nxe4 Nf6 Nxf6 exf6 c3 Be6 Bd3 Bd6 Qc2 h6 Ne2 Qc7 g3 Nd7 Bf4 O-O") {
+                //     println!("Prefix acc: {:?}", step.prefix_acc);
+                //     println!("Prefix: {:?}", prefix);
+                //     println!("Prefix vec: {:?}", prefix_vec.to_vec());
+                //     println!("New offset: {}", end);
+                //     println!("Full Moves String: {}", full_moves);
+                //     println!("Truncated Moves String: {}", moves_string);
+                // }
+                (prefix, end, san_strs)
             } else {
                 (prefix, end, Vec::new())
             }
@@ -97,19 +112,38 @@ pub fn extract_stats(db: &DB, tree: &mut Trie<String, GameWins>) {
             let mut game_stack = step.game_stack.clone();
             // println!("Child in loop: {:?}", child);
             let (prefix, offset, san_strs) = extract_san_strs(&step, &child);
+            // partial castle showing up here "-O"
             for san_str in san_strs.clone() {
                 let Game {position: old_pos, game_move: _} =
                     game_stack.pop().expect("No step on top of game stack!!");
+                // println!("Pos: {:?}", chess_db::pos_to_fen(old_pos.clone()));
+                // println!("Moves: {:?}", san_strs);
+                // if san_str == "-O" {
+                //     println!("prefix: {:?}", prefix.clone());
+                //     println!("offset: {}", offset.clone());
+                //     println!("Key: {:?}", child.key());
+                //     println!("Moves: {:?}", san_strs);
+                //     println!("Move: {}", san_str);
+                // }
                 let san_move: San = san_str.parse().expect("Invalid SAN.");
-                if chess_db::pos_to_fen(old_pos.clone()) == "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq -" {
-                    // println!("old prefix: {:?}", step.prefix_acc);
-                    // println!("old offset: {:?}", step.offset);
-                    // println!("new prefix: {:?}", prefix);
-                    // println!("new offset: {:?}", offset);
-                    // println!("Moves: {:?}", san_strs);
-                    // println!("Move: {}", san_str);
-                    // println!("Next move: {}", String::from_utf8(vec![78, 102, 54]).unwrap());
-                }
+
+
+                // FIXME: this block shows the issue in the tree!!
+                // if chess_db::pos_to_fen(old_pos.clone()) == "rnbqkbnr/pp1p1ppp/8/2p1p3/3PP1P1/8/PPP2P1P/RNBQKBNR b KQkq -" && san_str == "c5" {
+                //     println!("Key: {:?}", child.key());
+                //     println!("Pos: {:?}", chess_db::pos_to_fen(old_pos.clone()));
+                //     println!("Move: {}", san_str);
+                // }
+
+                // println!("\n\nMAKE MOVE\n");
+                // println!("old prefix: {:?}", step.prefix_acc);
+                // println!("old offset: {:?}", step.offset);
+                // println!("new prefix: {:?}", prefix);
+                // println!("new offset: {:?}", offset);
+                // println!("Moves: {:?}", san_strs);
+                // println!("Pos: {:?}", chess_db::pos_to_fen(old_pos.clone()));
+                // println!("Move: {}", san_str);
+                // println!("Next move: {}", String::from_utf8(vec![78, 102, 54]).unwrap());
                 let m = san_move.to_move(&old_pos).expect("Invalid position/move combo");
                 let new_pos = old_pos.clone().play(&m).expect("Invalid move for old pos!");
                 game_stack.push(Game {
@@ -120,14 +154,14 @@ pub fn extract_stats(db: &DB, tree: &mut Trie<String, GameWins>) {
                     position: new_pos.clone(),
                     game_move: None,
                 });
-                if chess_db::pos_to_fen(new_pos.clone()) == "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq -" {
+                // if chess_db::pos_to_fen(new_pos.clone()) == "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq -" {
                     // println!("old prefix: {:?}", step.prefix_acc);
                     // println!("old offset: {:?}", step.offset);
                     // println!("new prefix: {:?}", prefix);
                     // println!("new offset: {:?}", offset);
                     // println!("Moves: {:?}", san_strs);
                     // println!("Move: {}", san_str);
-                }
+                // }
             }
             if let Some(game_stats) = child.value() {
                 for game in game_stack.iter() {

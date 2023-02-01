@@ -35,7 +35,6 @@ pub fn ingest(filename: &str, db_path: &str) {
         if let Err(err) = buffered.read_all(&mut visitor) {
             panic!("Failed to read games: {:?}", err);
         }
-        // println!("Tree {:?}", visitor.san_tree);
         traversal::extract_stats(&db, &mut visitor.san_tree);
     }
 }

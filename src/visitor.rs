@@ -65,6 +65,7 @@ impl Visitor for MyVisitor<'_> {
 
     fn begin_game(&mut self) -> Self::Result {
         self.ply_count = 0;
+        self.san_string = "".to_string();
     }
 
     fn outcome(&mut self, outcome: Option<Outcome>) {
@@ -87,7 +88,6 @@ impl Visitor for MyVisitor<'_> {
     fn end_game(&mut self) -> Self::Result {
         if self.ply_count > MIN_PLY_COUNT {
             let s = std::mem::take(&mut self.san_string);
-            self.sys.refresh_memory();
             match self.winner {
                 Some(Color::White) => self.san_tree.map_with_default(
                     s,
@@ -117,6 +117,7 @@ impl Visitor for MyVisitor<'_> {
                     },
                 ),
             }
+            self.sys.refresh_memory();
             if self.sys.available_memory() < MIN_CLEANUP_MEMORY {
                 traversal::extract_stats(self.db, &mut self.san_tree);
             }
