@@ -6,7 +6,7 @@ use std::collections::HashMap;
 const PS: &str = "position_stats";
 const PMC: &str = "position_move_count";
 
-fn pos_to_fen(pos: Chess) -> String {
+pub fn pos_to_fen(pos: Chess) -> String {
     Epd::from_position(pos, EnPassantMode::Legal).to_string()
 }
 
