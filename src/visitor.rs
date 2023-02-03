@@ -86,8 +86,8 @@ impl Visitor for MyVisitor<'_> {
     }
 
     fn end_game(&mut self) -> Self::Result {
+        let s = std::mem::take(&mut self.san_string);
         if self.ply_count > MIN_PLY_COUNT {
-            let s = std::mem::take(&mut self.san_string);
             match self.winner {
                 Some(Color::White) => self.san_tree.map_with_default(
                     s,
