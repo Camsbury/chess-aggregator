@@ -2,9 +2,11 @@ use crate::game_stats::{GameStats, GameWins};
 use rocksdb::{WriteBatch, DB};
 use shakmaty::{fen::Epd, uci::Uci, CastlingMode, Chess, EnPassantMode, Move};
 use std::collections::HashMap;
+use sysinfo::{System, SystemExt};
 
 const PS: &str = "position_stats";
 const PMC: &str = "position_move_count";
+const MIN_CLEANUP_MEMORY: u64 = 5 * 1024 * 1024 * 1024;
 
 pub fn pos_to_fen(pos: Chess) -> String {
     Epd::from_position(pos, EnPassantMode::Legal).to_string()
@@ -45,6 +47,7 @@ fn is_valid_prefix(key: &[u8], prefix: &str) -> bool {
 
 pub struct ChessDB<'a> {
     db: &'a DB,
+    sys: System,
     cache: HashMap<String, GameWins>,
 }
 
@@ -52,6 +55,7 @@ impl ChessDB<'_> {
     pub fn new(db: &DB) -> ChessDB {
         ChessDB {
             db,
+            sys: System::new_all(),
             cache: HashMap::new(),
         }
     }
@@ -104,6 +108,10 @@ impl ChessDB<'_> {
         } else {
             self.cache.insert(key, game_wins);
         }
+        self.sys.refresh_memory();
+        if self.sys.available_memory() < MIN_CLEANUP_MEMORY {
+            self.flush();
+        }
     }
 
     pub fn get_pos_move_wins(
@@ -136,12 +144,16 @@ impl ChessDB<'_> {
         } else {
             self.cache.insert(key, game_wins);
         }
+        self.sys.refresh_memory();
+        if self.sys.available_memory() < MIN_CLEANUP_MEMORY {
+            self.flush();
+        }
     }
 
     pub fn flush(&mut self) {
         let mut batch = WriteBatch::default();
-        self.cache = std::mem::take(&mut self.cache);
-        for (k, v) in self.cache.iter() {
+        let cache = std::mem::take(&mut self.cache);
+        for (k, v) in cache.iter() {
             batch.put(k, v.to_bytes());
         }
         self.db
