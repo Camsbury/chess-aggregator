@@ -1,4 +1,4 @@
-use crate::chess_db;
+use crate::chess_db::ChessDB;
 use crate::game_stats::GameStats;
 use actix_web::{get, web, App, HttpServer, Responder};
 use rocksdb::{Options, DB};
@@ -25,7 +25,8 @@ async fn index(
     let db = DB::open(&db_opts, data.db_path.clone()).expect("Failed to open the database!");
     let fen: Fen = params.fen.parse().expect("invalid FEN!");
     let pos: Chess = fen.into_position(CastlingMode::Standard).expect("Not a parseable FEN?!");
-    let stats: GameStats = chess_db::get_pos_stats(&db, &pos).expect("Failed getting position stats");
+    let mut cdb = ChessDB::new(&db);
+    let stats: GameStats = cdb.get_pos_stats(&pos).expect("Failed getting position stats");
     web::Json(stats)
 }
 

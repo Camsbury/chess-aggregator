@@ -1,8 +1,9 @@
 use crate::chess_db;
+use crate::chess_db::ChessDB;
 use crate::game_stats::GameWins;
 use nibble_vec::Nibblet;
 use radix_trie::{SubTrie, Trie, TrieCommon};
-use rocksdb::{WriteBatch, DB};
+use rocksdb::{DB};
 use shakmaty::{san::San, Chess, Move, Position};
 
 const SEPARATOR: u8 = 32;
@@ -80,7 +81,7 @@ fn extract_san_strs(step: &TraversalStep, node: &StatsST) -> (Nibblet, usize, Ve
 
 pub fn extract_stats(db: &DB, tree: &mut Trie<String, GameWins>) {
     let tree = std::mem::take(tree); // Clearing out the tree for later use
-    let mut batch = WriteBatch::default();
+    let mut cdb = ChessDB::new(db);
     let mut stack = match TraversalStep::new(&tree) {
         Some(step) => vec![step],
         None => vec![],
@@ -114,24 +115,18 @@ pub fn extract_stats(db: &DB, tree: &mut Trie<String, GameWins>) {
             }
             if let Some(game_stats) = child.value() {
                 for game in game_stack.iter() {
-                    chess_db::update_pos_wins(
-                        db,
-                        &mut batch,
+                    cdb.update_pos_wins(
                         game.position.clone(),
                         *game_stats,
                     );
                     if let Some(m) = game.game_move.clone() {
-                        chess_db::update_pos_move_wins(
-                            db,
-                            &mut batch,
+                        cdb.update_pos_move_wins(
                             game.position.clone(),
                             m,
                             *game_stats,
                         )
                     }
                 }
-                let old_batch = std::mem::take(&mut batch);
-                db.write(old_batch).expect("Batch couldn't write to DB");
             }
 
             stack.push(TraversalStep::build_step(
@@ -142,5 +137,5 @@ pub fn extract_stats(db: &DB, tree: &mut Trie<String, GameWins>) {
             ));
         }
     }
-    db.write(batch).expect("Batch couldn't write to DB");
+    cdb.flush();
 }
