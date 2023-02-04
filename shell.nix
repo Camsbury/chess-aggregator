@@ -6,6 +6,7 @@ in with pkgs; mkShell {
     clang
     llvmPackages.libclang
     rocksdb
+    linuxPackages.perf
     rust-analyzer
     rustup
   ];
