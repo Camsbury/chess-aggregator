@@ -110,7 +110,7 @@ pub fn extract_stats(db: &DB, tree: &mut Trie<String, GameWins>) {
                     });
                 } else {
                     // log what happened and don't push to the stack
-                    println!("Attempted to play an illegal move: {} in position: {}", san_str, chess_db::pos_to_keyable(&old_pos));
+                    println!("Attempted to play an illegal move: {} in position: {}", san_str, chess_db::pos_to_fen(&old_pos));
                 }
             }
             if let Some(game_stats) = child.value() {

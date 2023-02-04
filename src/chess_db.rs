@@ -1,48 +1,53 @@
 use crate::game_stats::{GameStats, GameWins};
 use rocksdb::{WriteBatch, DB};
-use shakmaty::{fen::Fen, uci::Uci, CastlingMode, Chess, EnPassantMode, Move};
+use shakmaty::{fen::Fen, uci::Uci, CastlingMode, EnPassantMode, Chess, Move};
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::collections::hash_map::DefaultHasher;
 
-const PS: &str = "position_stats";
-const PMC: &str = "position_move_count";
+const PS: &[u8] = "position_stats".as_bytes();
+const PMC: &[u8] = "position_move_count".as_bytes();
 
-pub fn pos_to_keyable(pos: &Chess) -> String {
+pub fn pos_to_fen(pos: &Chess) -> String {
     Fen::from_position(pos.clone(), EnPassantMode::Legal).to_string()
 }
 
-pub fn pos_to_key(keyable: &String) -> String {
-    PS.to_owned() + keyable
+pub fn pos_to_keyable(pos: &Chess) -> Vec<u8> {
+    let mut hasher = DefaultHasher::new();
+    Fen::from_position(pos.clone(), EnPassantMode::Legal).hash(&mut hasher);
+    let hash = hasher.finish();
+    hash.to_be_bytes().to_vec()
 }
 
-fn pos_to_prefix(keyable: &String) -> String {
-    PMC.to_owned() + keyable
+pub fn pos_to_key(keyable: &[u8]) -> Vec<u8> {
+    let mut ret = PS.to_owned();
+    ret.append(&mut keyable.to_owned());
+    ret
 }
 
-pub fn pos_move_to_key(keyable: &String, chess_move: &Move) -> String {
-    PMC.to_owned() + keyable + &chess_move.to_uci(CastlingMode::Standard).to_string()
+pub fn pos_to_prefix(keyable: &[u8]) -> Vec<u8> {
+    let mut ret = PMC.to_owned();
+    ret.append(&mut keyable.to_owned());
+    ret
 }
 
-fn key_to_uci(key: Vec<u8>, prefix: &str) -> Uci {
-    let key_string =
-        String::from_utf8(key).expect("Key isn't decoding to UTF-8 correctly");
-    let move_string: String = key_string
-        .chars()
-        .into_iter()
-        .skip(prefix.chars().count())
-        .collect();
-    Uci::from_ascii(move_string.as_bytes())
-        .expect("Failed to parse UCI from key")
+pub fn pos_move_to_key(keyable: &[u8], chess_move: &Move) -> Vec<u8> {
+    let mut ret = pos_to_prefix(keyable);
+    ret.append(&mut chess_move.to_uci(CastlingMode::Standard).to_string().as_bytes().to_vec());
+    ret
 }
 
-fn is_valid_prefix(key: &[u8], prefix: &str) -> bool {
-    let key_string = String::from_utf8(key.to_owned())
-        .expect("Key isn't decoding to UTF-8 correctly");
-    key_string.starts_with(prefix)
+fn key_to_uci(key: &[u8], prefix: &[u8]) -> Uci {
+    Uci::from_ascii(&key[prefix.len()..]).expect("Failed to parse UCI from key")
+}
+
+fn is_valid_prefix(key: &[u8], prefix: &[u8]) -> bool {
+    prefix == key.get(..prefix.len()).expect("Prefix is longer than key!!")
 }
 
 pub struct ChessDB<'a> {
     db: &'a DB,
-    cache: HashMap<String, GameWins>,
+    cache: HashMap<Vec<u8>, GameWins>,
 }
 
 impl ChessDB<'_> {
@@ -57,17 +62,15 @@ impl ChessDB<'_> {
     pub fn get_pos_stats(&mut self, pos: &Chess) -> Option<GameStats> {
         let keyable = pos_to_keyable(pos);
         let prefix = pos_to_prefix(&keyable);
-        let prefix_clone = prefix.clone();
-        let prefix_iter = self.db.prefix_iterator(prefix);
+        let prefix_iter = self.db.prefix_iterator(&prefix);
         let mut game_moves = HashMap::new();
         for item in prefix_iter {
             let (key, value) = item.expect("Prefix iter error in rocks db?");
-            let key_clone = key.clone().into_vec();
             // NOTE: stopping iter on mismatched prefix, not sure how to bound it otherwise
-            if !is_valid_prefix(&key_clone, &prefix_clone) {
+            if !is_valid_prefix(&key, &prefix) {
                 break;
             }
-            let m = key_to_uci(key_clone, &prefix_clone)
+            let m = key_to_uci(&key, &prefix)
                 .to_move(pos)
                 .expect("The move is invalid uci for the position!");
             let game_wins = GameWins::from_bytes(value.to_vec());
@@ -81,7 +84,7 @@ impl ChessDB<'_> {
         })
     }
 
-    pub fn get_pos_wins(&mut self, keyable: &String) -> Option<GameWins> {
+    pub fn get_pos_wins(&mut self, keyable: &[u8]) -> Option<GameWins> {
         let key = pos_to_key(keyable);
         match self.cache.get(&key) {
             None => {
@@ -95,7 +98,7 @@ impl ChessDB<'_> {
         }
     }
 
-    pub fn update_pos_wins(&mut self, keyable: &String, game_wins: GameWins) {
+    pub fn update_pos_wins(&mut self, keyable: &[u8], game_wins: GameWins) {
         let key = pos_to_key(keyable);
         if let Some(db_stats) = Self::get_pos_wins(self, keyable) {
             self.cache.insert(key, db_stats.combine(&game_wins));
@@ -106,7 +109,7 @@ impl ChessDB<'_> {
 
     pub fn get_pos_move_wins(
         &mut self,
-        keyable: &String,
+        keyable: &[u8],
         chess_move: Move,
     ) -> Option<GameWins> {
         let key = pos_move_to_key(keyable, &chess_move);
@@ -124,7 +127,7 @@ impl ChessDB<'_> {
 
     pub fn update_pos_move_wins(
         &mut self,
-        keyable: &String,
+        keyable: &[u8],
         chess_move: Move, // TODO: check that to_string is reasonable
         game_wins: GameWins,
     ) {
@@ -148,5 +151,29 @@ impl ChessDB<'_> {
         self.db
             .write(batch)
             .expect("Failed to write batch to rocks.");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use shakmaty::{san::San, Position};
+    #[test]
+    fn prefix_of_key_test() {
+        let mut board = Chess::new();
+        let e4 = "e4".parse::<San>().unwrap().to_move(&board).unwrap();
+        board.play_unchecked(&e4);
+        let e5 = "e5".parse::<San>().unwrap().to_move(&board).unwrap();
+
+        let keyable = pos_to_keyable(&board);
+        let key = pos_move_to_key(&keyable, &e5);
+
+        let fen_str = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1";
+        let fen: Fen = fen_str.parse().expect("invalid FEN!");
+        let pos: Chess = fen.into_position(CastlingMode::Standard).expect("Not a parseable FEN?!");
+        let keyable2 = pos_to_keyable(&pos);
+        let prefix = pos_to_prefix(&keyable2);
+
+        assert_eq!(prefix, &key[..prefix.len()]);
     }
 }
