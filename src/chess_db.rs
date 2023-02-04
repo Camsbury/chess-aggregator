@@ -1,30 +1,25 @@
 use crate::game_stats::{GameStats, GameWins};
 use rocksdb::{WriteBatch, DB};
-use shakmaty::{fen::Epd, uci::Uci, CastlingMode, Chess, EnPassantMode, Move};
+use shakmaty::{fen::Fen, uci::Uci, CastlingMode, Chess, EnPassantMode, Move};
 use std::collections::HashMap;
-use sysinfo::{System, SystemExt};
 
 const PS: &str = "position_stats";
 const PMC: &str = "position_move_count";
-const MIN_CLEANUP_MEMORY: u64 = 5 * 1024 * 1024 * 1024;
 
-pub fn pos_to_fen(pos: Chess) -> String {
-    Epd::from_position(pos, EnPassantMode::Legal).to_string()
+pub fn pos_to_keyable(pos: &Chess) -> String {
+    Fen::from_position(pos.clone(), EnPassantMode::Legal).to_string()
 }
 
-fn pos_to_key(pos: &Chess) -> String {
-    let fen = pos_to_fen(pos.clone());
-    PS.to_owned() + &fen
+pub fn pos_to_key(keyable: &String) -> String {
+    PS.to_owned() + keyable
 }
 
-fn pos_to_prefix(pos: Chess) -> String {
-    let fen = pos_to_fen(pos);
-    PMC.to_owned() + &fen
+fn pos_to_prefix(keyable: &String) -> String {
+    PMC.to_owned() + keyable
 }
 
-fn pos_move_to_key(pos: &Chess, chess_move: &Move) -> String {
-    (pos_to_prefix(pos.clone()))
-        + &chess_move.to_uci(CastlingMode::Standard).to_string()
+pub fn pos_move_to_key(keyable: &String, chess_move: &Move) -> String {
+    PMC.to_owned() + keyable + &chess_move.to_uci(CastlingMode::Standard).to_string()
 }
 
 fn key_to_uci(key: Vec<u8>, prefix: &str) -> Uci {
@@ -47,7 +42,6 @@ fn is_valid_prefix(key: &[u8], prefix: &str) -> bool {
 
 pub struct ChessDB<'a> {
     db: &'a DB,
-    sys: System,
     cache: HashMap<String, GameWins>,
 }
 
@@ -55,14 +49,14 @@ impl ChessDB<'_> {
     pub fn new(db: &DB) -> ChessDB {
         ChessDB {
             db,
-            sys: System::new_all(),
             cache: HashMap::new(),
         }
     }
 
     // TODO: include cache maybe?
     pub fn get_pos_stats(&mut self, pos: &Chess) -> Option<GameStats> {
-        let prefix = pos_to_prefix(pos.clone());
+        let keyable = pos_to_keyable(pos);
+        let prefix = pos_to_prefix(&keyable);
         let prefix_clone = prefix.clone();
         let prefix_iter = self.db.prefix_iterator(prefix);
         let mut game_moves = HashMap::new();
@@ -81,18 +75,18 @@ impl ChessDB<'_> {
             game_moves.insert(uci, game_wins);
         }
 
-        Self::get_pos_wins(self, pos).map(|game_wins| GameStats {
+        Self::get_pos_wins(self, &keyable).map(|game_wins| GameStats {
             game_wins,
             game_moves,
         })
     }
 
-    pub fn get_pos_wins(&mut self, pos: &Chess) -> Option<GameWins> {
-        let key = pos_to_key(pos);
+    pub fn get_pos_wins(&mut self, keyable: &String) -> Option<GameWins> {
+        let key = pos_to_key(keyable);
         match self.cache.get(&key) {
             None => {
                 let game_wins = GameWins::from_bytes(
-                    self.db.get(pos_to_key(pos)).ok()??.to_vec(),
+                    self.db.get(&key).ok()??.to_vec(),
                 );
                 self.cache.insert(key, game_wins);
                 Some(game_wins)
@@ -101,29 +95,25 @@ impl ChessDB<'_> {
         }
     }
 
-    pub fn update_pos_wins(&mut self, pos: Chess, game_wins: GameWins) {
-        let key = pos_to_key(&pos);
-        if let Some(db_stats) = Self::get_pos_wins(self, &pos) {
+    pub fn update_pos_wins(&mut self, keyable: &String, game_wins: GameWins) {
+        let key = pos_to_key(keyable);
+        if let Some(db_stats) = Self::get_pos_wins(self, keyable) {
             self.cache.insert(key, db_stats.combine(&game_wins));
         } else {
             self.cache.insert(key, game_wins);
-        }
-        self.sys.refresh_memory();
-        if self.sys.available_memory() < MIN_CLEANUP_MEMORY {
-            self.flush();
         }
     }
 
     pub fn get_pos_move_wins(
         &mut self,
-        pos: &Chess,
+        keyable: &String,
         chess_move: Move,
     ) -> Option<GameWins> {
-        let key = pos_move_to_key(pos, &chess_move);
+        let key = pos_move_to_key(keyable, &chess_move);
         match self.cache.get(&key) {
             None => {
                 let game_wins = GameWins::from_bytes(
-                    self.db.get(pos_to_key(pos)).ok()??.to_vec(),
+                    self.db.get(pos_to_key(keyable)).ok()??.to_vec(),
                 );
                 self.cache.insert(key, game_wins);
                 Some(game_wins)
@@ -134,28 +124,27 @@ impl ChessDB<'_> {
 
     pub fn update_pos_move_wins(
         &mut self,
-        pos: Chess,
+        keyable: &String,
         chess_move: Move, // TODO: check that to_string is reasonable
         game_wins: GameWins,
     ) {
-        let key = pos_move_to_key(&pos, &chess_move);
-        if let Some(db_wins) = Self::get_pos_move_wins(self, &pos, chess_move) {
+        let key = pos_move_to_key(keyable, &chess_move);
+        if let Some(db_wins) = Self::get_pos_move_wins(self, keyable, chess_move) {
             self.cache.insert(key, db_wins.combine(&game_wins));
         } else {
             self.cache.insert(key, game_wins);
         }
-        self.sys.refresh_memory();
-        if self.sys.available_memory() < MIN_CLEANUP_MEMORY {
-            self.flush();
-        }
     }
 
     pub fn flush(&mut self) {
+        println!("Creating batch");
         let mut batch = WriteBatch::default();
         let cache = std::mem::take(&mut self.cache);
-        for (k, v) in cache.iter() {
+        println!("Iterating the cache");
+        for (k, v) in cache {
             batch.put(k, v.to_bytes());
         }
+        println!("Writing to DB");
         self.db
             .write(batch)
             .expect("Failed to write batch to rocks.");

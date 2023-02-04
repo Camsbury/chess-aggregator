@@ -8,7 +8,6 @@ use sysinfo::{System, SystemExt};
 
 const MIN_RATING: u32 = 1800;
 const MIN_PLY_COUNT: u32 = 7;
-const MIN_CLEANUP_MEMORY: u64 = 5 * 1024 * 1024 * 1024;
 
 pub struct MyVisitor<'a> {
     db: &'a DB,
@@ -116,10 +115,6 @@ impl Visitor for MyVisitor<'_> {
                         draw: 1,
                     },
                 ),
-            }
-            self.sys.refresh_memory();
-            if self.sys.available_memory() < MIN_CLEANUP_MEMORY {
-                traversal::extract_stats(self.db, &mut self.san_tree);
             }
         }
     }

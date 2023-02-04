@@ -110,18 +110,19 @@ pub fn extract_stats(db: &DB, tree: &mut Trie<String, GameWins>) {
                     });
                 } else {
                     // log what happened and don't push to the stack
-                    println!("Attempted to play an illegal move: {} in position: {}", san_str, chess_db::pos_to_fen(old_pos));
+                    println!("Attempted to play an illegal move: {} in position: {}", san_str, chess_db::pos_to_keyable(&old_pos));
                 }
             }
             if let Some(game_stats) = child.value() {
                 for game in game_stack.iter() {
+                    let keyable = chess_db::pos_to_keyable(&game.position);
                     cdb.update_pos_wins(
-                        game.position.clone(),
+                        &keyable,
                         *game_stats,
                     );
                     if let Some(m) = game.game_move.clone() {
                         cdb.update_pos_move_wins(
-                            game.position.clone(),
+                            &keyable,
                             m,
                             *game_stats,
                         )
@@ -137,5 +138,6 @@ pub fn extract_stats(db: &DB, tree: &mut Trie<String, GameWins>) {
             ));
         }
     }
+    println!("Finished traversal, flushing the ChessDB");
     cdb.flush();
 }
