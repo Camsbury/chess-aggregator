@@ -1,6 +1,7 @@
 use crate::chess_db;
 use crate::chess_db::ChessDB;
 use crate::game_stats::GameWins;
+use crate::visitor::SanTree;
 use nibble_vec::Nibblet;
 use radix_trie::{SubTrie, Trie, TrieCommon};
 use rocksdb::{DB};
@@ -79,9 +80,9 @@ fn extract_san_strs(step: &TraversalStep, node: &StatsST) -> (Nibblet, usize, Ve
     }
 }
 
-pub fn extract_stats(db: &DB, tree: &mut Trie<String, GameWins>) {
-    let tree = std::mem::take(tree); // Clearing out the tree for later use
-    let mut cdb = ChessDB::new(db);
+pub fn extract_stats(san_tree: &mut SanTree) {
+    let tree = std::mem::take(&mut san_tree.tree); // Clearing out the tree for later use
+    let mut cdb = ChessDB::new(&san_tree.db);
     let mut stack = match TraversalStep::new(&tree) {
         Some(step) => vec![step],
         None => vec![],

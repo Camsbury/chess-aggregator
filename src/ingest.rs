@@ -1,25 +1,23 @@
 use crate::traversal;
 use crate::visitor;
 use pgn_reader::BufferedReader;
-use rocksdb::{Options, DB};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::sync::{Arc, Mutex};
+use std::thread;
 use zstd::stream::read::Decoder;
 
 pub fn ingest(filename: &str, db_path: &str) {
+    let san_tree_shared = Arc::new(Mutex::new(visitor::SanTree::new(db_path)));
+    let mut handles = vec![];
+
     let file = match File::open(filename) {
         Ok(file) => file,
         Err(err) => {
             panic!("Failed to open file listing .pgn.zst files: {:?}", err);
         }
     };
-
-    let mut db_opts = Options::default();
-    db_opts.create_if_missing(true);
-    let db = DB::open(&db_opts, db_path).unwrap();
-
     let reader = BufReader::new(file);
-    let mut visitor = visitor::MyVisitor::new(&db);
     for line in reader.lines() {
         let pgn_path = line.expect("Line didn't parse?!");
         if pgn_path.is_empty() {
@@ -35,11 +33,21 @@ pub fn ingest(filename: &str, db_path: &str) {
         };
         let decoder = Decoder::new(file).unwrap();
         let mut buffered = BufferedReader::new(decoder);
-        if let Err(err) = buffered.read_all(&mut visitor) {
-            panic!("Failed to read games: {:?}", err);
-        }
+        let mut visitor =
+            visitor::MyVisitor::new(Arc::clone(&san_tree_shared));
+        let handle = thread::spawn(move || {
+            if let Err(err) = buffered.read_all(&mut visitor) {
+                panic!("Failed to read games: {:?}", err);
+            }
+        });
+        handles.push(handle);
     }
+    for handle in handles {
+        handle.join().unwrap();
+    }
+
+    let mut san_tree = san_tree_shared.lock().unwrap();
     println!("Built trie from games");
-    println!("Write count: {}", visitor.write_count);
-    traversal::extract_stats(&db, &mut visitor.san_tree);
+    println!("Write count: {}", san_tree.write_count);
+    traversal::extract_stats(&mut san_tree);
 }

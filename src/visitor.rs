@@ -3,40 +3,64 @@ use crate::traversal;
 use btoi;
 use pgn_reader::{Color, Outcome, RawHeader, SanPlus, Skip, Visitor};
 use radix_trie::Trie;
-use rocksdb::DB;
-use sysinfo::{System, SystemExt};
+use rocksdb::{Options, DB};
+use std::sync::{Arc, Mutex};
 
 const MIN_RATING: u32 = 1800;
 const MIN_PLY_COUNT: u32 = 7;
 const THRESHOLD_WRITES: u32 = 2_000_000;
 
-pub struct MyVisitor<'a> {
-    db: &'a DB,
-    pub san_tree: Trie<String, GameWins>,
-    pub san_string: String,
-    pub winner: Option<Color>,
-    pub sys: System,
-    pub skip_game: bool,
-    pub ply_count: u32,
+pub struct SanTree {
+    pub db: DB,
+    pub tree: Trie<String, GameWins>,
     pub write_count: u32,
 }
 
-impl MyVisitor<'_> {
-    pub fn new(db: &DB) -> MyVisitor {
-        MyVisitor {
+impl SanTree {
+    pub fn new(db_path: &str) -> SanTree {
+
+        let mut db_opts = Options::default();
+        db_opts.create_if_missing(true);
+        let db = DB::open(&db_opts, db_path).unwrap();
+
+        SanTree {
             db,
-            san_tree: Trie::default(),
-            san_string: String::new(),
-            winner: None,
-            sys: System::new_all(),
-            skip_game: false,
-            ply_count: 0,
+            tree: Trie::default(),
             write_count: 0,
+        }
+    }
+
+    pub fn inc_writes(&mut self) {
+        self.write_count += 1;
+        if self.write_count > THRESHOLD_WRITES {
+            self.write_count = 0;
+            println!("Trie threshold reached: extracting stats");
+            traversal::extract_stats(self);
         }
     }
 }
 
-impl Visitor for MyVisitor<'_> {
+pub struct MyVisitor {
+    pub san_tree: Arc<Mutex<SanTree>>,
+    pub san_string: String,
+    pub winner: Option<Color>,
+    pub skip_game: bool,
+    pub ply_count: u32,
+}
+
+impl MyVisitor {
+    pub fn new(san_tree: Arc<Mutex<SanTree>>) -> MyVisitor {
+        MyVisitor {
+            san_tree,
+            san_string: String::new(),
+            winner: None,
+            skip_game: false,
+            ply_count: 0,
+        }
+    }
+}
+
+impl Visitor for MyVisitor {
     // '_ lifetime
     type Result = ();
 
@@ -89,9 +113,10 @@ impl Visitor for MyVisitor<'_> {
 
     fn end_game(&mut self) -> Self::Result {
         let s = std::mem::take(&mut self.san_string);
+        let mut san_tree = self.san_tree.lock().unwrap();
         if self.ply_count > MIN_PLY_COUNT {
             match self.winner {
-                Some(Color::White) => self.san_tree.map_with_default(
+                Some(Color::White) => san_tree.tree.map_with_default(
                     s,
                     |x| x.white += 1,
                     GameWins {
@@ -100,7 +125,7 @@ impl Visitor for MyVisitor<'_> {
                         draw: 0,
                     },
                 ),
-                Some(Color::Black) => self.san_tree.map_with_default(
+                Some(Color::Black) => san_tree.tree.map_with_default(
                     s,
                     |x| x.black += 1,
                     GameWins {
@@ -109,7 +134,7 @@ impl Visitor for MyVisitor<'_> {
                         draw: 0,
                     },
                 ),
-                None => self.san_tree.map_with_default(
+                None => san_tree.tree.map_with_default(
                     s,
                     |x| x.draw += 1,
                     GameWins {
@@ -119,12 +144,7 @@ impl Visitor for MyVisitor<'_> {
                     },
                 ),
             }
-            self.write_count += 1;
-        }
-        if self.write_count > THRESHOLD_WRITES {
-            self.write_count = 0;
-            println!("Trie threshold reached: extracting stats");
-            traversal::extract_stats(self.db, &mut self.san_tree);
+            san_tree.inc_writes();
         }
     }
 }
