@@ -5,8 +5,12 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
 
-const PS: &[u8] = "position_stats".as_bytes();
-const PMC: &[u8] = "position_move_count".as_bytes();
+//position stats
+const PS: &[u8] = "ps".as_bytes();
+//position move stats
+const PMS: &[u8] = "pms".as_bytes();
+// something like 3x kb free memory if dynamic in future
+const MAX_CACHE_SIZE: usize = 60_000_000;
 
 pub fn pos_to_fen(pos: &Chess) -> String {
     Fen::from_position(pos.clone(), EnPassantMode::Legal).to_string()
@@ -26,7 +30,7 @@ pub fn pos_to_key(keyable: &[u8]) -> Vec<u8> {
 }
 
 pub fn pos_to_prefix(keyable: &[u8]) -> Vec<u8> {
-    let mut ret = PMC.to_owned();
+    let mut ret = PMS.to_owned();
     ret.append(&mut keyable.to_owned());
     ret
 }
@@ -105,6 +109,9 @@ impl ChessDB<'_> {
         } else {
             self.cache.insert(key, game_wins);
         }
+        if self.cache.len() > MAX_CACHE_SIZE {
+            self.flush();
+        }
     }
 
     pub fn get_pos_move_wins(
@@ -128,7 +135,7 @@ impl ChessDB<'_> {
     pub fn update_pos_move_wins(
         &mut self,
         keyable: &[u8],
-        chess_move: Move, // TODO: check that to_string is reasonable
+        chess_move: Move,
         game_wins: GameWins,
     ) {
         let key = pos_move_to_key(keyable, &chess_move);
@@ -137,9 +144,13 @@ impl ChessDB<'_> {
         } else {
             self.cache.insert(key, game_wins);
         }
+        if self.cache.len() > MAX_CACHE_SIZE {
+            self.flush();
+        }
     }
 
     pub fn flush(&mut self) {
+        println!("Cache size at flush: {}", self.cache.len());
         println!("Creating batch");
         let mut batch = WriteBatch::default();
         println!("Iterating the cache");
@@ -150,6 +161,7 @@ impl ChessDB<'_> {
         self.db
             .write(batch)
             .expect("Failed to write batch to rocks.");
+        println!("Written to DB");
     }
 }
 

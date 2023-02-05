@@ -8,7 +8,7 @@ use sysinfo::{System, SystemExt};
 
 const MIN_RATING: u32 = 1800;
 const MIN_PLY_COUNT: u32 = 7;
-const THRESHOLD_WRITES: u32 = 1_000_000;
+const THRESHOLD_WRITES: u32 = 2_000_000;
 
 pub struct MyVisitor<'a> {
     db: &'a DB,
