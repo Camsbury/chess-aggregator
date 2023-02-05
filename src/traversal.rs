@@ -110,7 +110,22 @@ pub fn extract_stats(db: &DB, tree: &mut Trie<String, GameWins>) {
                     });
                 } else {
                     // log what happened and don't push to the stack
-                    println!("Attempted to play an illegal move: {} in position: {}", san_str, chess_db::pos_to_fen(&old_pos));
+                    println!(
+                        "Attempted to play an illegal move: {} in position: {}",
+                        san_str,
+                        chess_db::pos_to_fen(&old_pos)
+                    );
+                    println!("Previous moves were:");
+                    for g in &game_stack {
+                        if let Some(m) = &g.game_move {
+                            println!("{}", San::from_move(&g.position, m));
+                        }
+                    }
+                    game_stack.push(Game {
+                        position: old_pos,
+                        game_move: None,
+                    });
+                    break; // stop adding any additional moves
                 }
             }
             if let Some(game_stats) = child.value() {

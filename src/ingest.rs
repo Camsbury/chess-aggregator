@@ -21,9 +21,12 @@ pub fn ingest(filename: &str, db_path: &str) {
     let reader = BufReader::new(file);
     let mut visitor = visitor::MyVisitor::new(&db);
     for line in reader.lines() {
-        let compressed_pgn_file = line.unwrap();
-        println!("Processing file: {}", compressed_pgn_file);
-        let file = match File::open(&compressed_pgn_file) {
+        let pgn_path = line.expect("Line didn't parse?!");
+        if pgn_path.is_empty() {
+            continue;
+        }
+        println!("Processing file: {}", pgn_path);
+        let file = match File::open(&pgn_path) {
             Ok(file) => file,
             Err(err) => {
                 println!("Failed to open .pgn.zst file: {:?}", err);
