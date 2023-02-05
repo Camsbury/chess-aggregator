@@ -19,6 +19,7 @@ pub fn ingest(filename: &str, db_path: &str) {
     let db = DB::open(&db_opts, db_path).unwrap();
 
     let reader = BufReader::new(file);
+    let mut visitor = visitor::MyVisitor::new(&db);
     for line in reader.lines() {
         let compressed_pgn_file = line.unwrap();
         println!("Processing file: {}", compressed_pgn_file);
@@ -31,12 +32,11 @@ pub fn ingest(filename: &str, db_path: &str) {
         };
         let decoder = Decoder::new(file).unwrap();
         let mut buffered = BufferedReader::new(decoder);
-        let mut visitor = visitor::MyVisitor::new(&db);
         if let Err(err) = buffered.read_all(&mut visitor) {
             panic!("Failed to read games: {:?}", err);
         }
-        println!("Built trie from games");
-        println!("Write count: {}", visitor.write_count);
-        traversal::extract_stats(&db, &mut visitor.san_tree);
     }
+    println!("Built trie from games");
+    println!("Write count: {}", visitor.write_count);
+    traversal::extract_stats(&db, &mut visitor.san_tree);
 }
