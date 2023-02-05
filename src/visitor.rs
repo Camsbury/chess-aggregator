@@ -18,7 +18,6 @@ pub struct SanTree {
 
 impl SanTree {
     pub fn new(db_path: &str) -> SanTree {
-
         let mut db_opts = Options::default();
         db_opts.create_if_missing(true);
         let db = DB::open(&db_opts, db_path).unwrap();

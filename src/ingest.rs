@@ -33,8 +33,7 @@ pub fn ingest(filename: &str, db_path: &str) {
         };
         let decoder = Decoder::new(file).unwrap();
         let mut buffered = BufferedReader::new(decoder);
-        let mut visitor =
-            visitor::MyVisitor::new(Arc::clone(&san_tree_shared));
+        let mut visitor = visitor::MyVisitor::new(Arc::clone(&san_tree_shared));
         let handle = thread::spawn(move || {
             if let Err(err) = buffered.read_all(&mut visitor) {
                 panic!("Failed to read games: {:?}", err);

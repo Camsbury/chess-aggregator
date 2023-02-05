@@ -22,11 +22,16 @@ async fn index(
     //TODO: handle errors for all the following unwraps
     let mut db_opts = Options::default();
     db_opts.create_if_missing(true);
-    let db = DB::open(&db_opts, data.db_path.clone()).expect("Failed to open the database!");
+    let db = DB::open(&db_opts, data.db_path.clone())
+        .expect("Failed to open the database!");
     let fen: Fen = params.fen.parse().expect("invalid FEN!");
-    let pos: Chess = fen.into_position(CastlingMode::Standard).expect("Not a parseable FEN?!");
+    let pos: Chess = fen
+        .into_position(CastlingMode::Standard)
+        .expect("Not a parseable FEN?!");
     let mut cdb = ChessDB::new(&db);
-    let stats: GameStats = cdb.get_pos_stats(&pos).expect("Failed getting position stats");
+    let stats: GameStats = cdb
+        .get_pos_stats(&pos)
+        .expect("Failed getting position stats");
     web::Json(stats)
 }
 

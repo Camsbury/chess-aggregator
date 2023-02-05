@@ -1,9 +1,9 @@
 use crate::game_stats::{GameStats, GameWins};
 use rocksdb::{WriteBatch, DB};
-use shakmaty::{fen::Fen, uci::Uci, CastlingMode, EnPassantMode, Chess, Move};
+use shakmaty::{fen::Fen, uci::Uci, CastlingMode, Chess, EnPassantMode, Move};
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::collections::hash_map::DefaultHasher;
 
 //position stats
 const PS: &[u8] = "ps".as_bytes();
@@ -37,7 +37,13 @@ pub fn pos_to_prefix(keyable: &[u8]) -> Vec<u8> {
 
 pub fn pos_move_to_key(keyable: &[u8], chess_move: &Move) -> Vec<u8> {
     let mut ret = pos_to_prefix(keyable);
-    ret.append(&mut chess_move.to_uci(CastlingMode::Standard).to_string().as_bytes().to_vec());
+    ret.append(
+        &mut chess_move
+            .to_uci(CastlingMode::Standard)
+            .to_string()
+            .as_bytes()
+            .to_vec(),
+    );
     ret
 }
 
@@ -46,7 +52,10 @@ fn key_to_uci(key: &[u8], prefix: &[u8]) -> Uci {
 }
 
 fn is_valid_prefix(key: &[u8], prefix: &[u8]) -> bool {
-    prefix == key.get(..prefix.len()).expect("Prefix is longer than key!!")
+    prefix
+        == key
+            .get(..prefix.len())
+            .expect("Prefix is longer than key!!")
 }
 
 pub struct ChessDB<'a> {
@@ -92,9 +101,8 @@ impl ChessDB<'_> {
         let key = pos_to_key(keyable);
         match self.cache.get(&key) {
             None => {
-                let game_wins = GameWins::from_bytes(
-                    self.db.get(&key).ok()??.to_vec(),
-                );
+                let game_wins =
+                    GameWins::from_bytes(self.db.get(&key).ok()??.to_vec());
                 self.cache.insert(key, game_wins);
                 Some(game_wins)
             }
@@ -139,7 +147,9 @@ impl ChessDB<'_> {
         game_wins: GameWins,
     ) {
         let key = pos_move_to_key(keyable, &chess_move);
-        if let Some(db_wins) = Self::get_pos_move_wins(self, keyable, chess_move) {
+        if let Some(db_wins) =
+            Self::get_pos_move_wins(self, keyable, chess_move)
+        {
             self.cache.insert(key, db_wins.combine(&game_wins));
         } else {
             self.cache.insert(key, game_wins);
@@ -179,9 +189,12 @@ mod tests {
         let keyable = pos_to_keyable(&board);
         let key = pos_move_to_key(&keyable, &e5);
 
-        let fen_str = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1";
+        let fen_str =
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1";
         let fen: Fen = fen_str.parse().expect("invalid FEN!");
-        let pos: Chess = fen.into_position(CastlingMode::Standard).expect("Not a parseable FEN?!");
+        let pos: Chess = fen
+            .into_position(CastlingMode::Standard)
+            .expect("Not a parseable FEN?!");
         let keyable2 = pos_to_keyable(&pos);
         let prefix = pos_to_prefix(&keyable2);
 

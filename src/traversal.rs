@@ -4,7 +4,7 @@ use crate::game_stats::GameWins;
 use crate::visitor::SanTree;
 use nibble_vec::Nibblet;
 use radix_trie::{SubTrie, Trie, TrieCommon};
-use rocksdb::{DB};
+use rocksdb::DB;
 use shakmaty::{san::San, Chess, Move, Position};
 
 const SEPARATOR: u8 = 32;
@@ -55,19 +55,33 @@ impl TraversalStep<'_> {
     }
 }
 
-fn extract_san_strs(step: &TraversalStep, node: &StatsST) -> (Nibblet, usize, Vec<String>) {
+fn extract_san_strs(
+    step: &TraversalStep,
+    node: &StatsST,
+) -> (Nibblet, usize, Vec<String>) {
     let prefix = step.prefix_acc.clone().join(node.prefix());
     let prefix_vec = &prefix.as_bytes().to_vec();
-    let new_offset = if !step.tree.is_leaf() && prefix_vec.last() == Some(&SEPARATOR) {
-        prefix_vec.iter().rev().skip(1).rev().rposition(|x| *x == SEPARATOR)
-    } else {
-        prefix_vec.iter().rposition(|x| *x == SEPARATOR)
-    };
+    let new_offset =
+        if !step.tree.is_leaf() && prefix_vec.last() == Some(&SEPARATOR) {
+            prefix_vec
+                .iter()
+                .rev()
+                .skip(1)
+                .rev()
+                .rposition(|x| *x == SEPARATOR)
+        } else {
+            prefix_vec.iter().rposition(|x| *x == SEPARATOR)
+        };
 
     if let Some(end) = new_offset {
         if end > step.offset {
-            if let Ok(moves_string) = String::from_utf8(prefix_vec[step.offset..end].to_vec()) {
-                let san_strs: Vec<String> = moves_string.split_whitespace().map(|s| s.to_string()).collect();
+            if let Ok(moves_string) =
+                String::from_utf8(prefix_vec[step.offset..end].to_vec())
+            {
+                let san_strs: Vec<String> = moves_string
+                    .split_whitespace()
+                    .map(|s| s.to_string())
+                    .collect();
                 (prefix, end, san_strs)
             } else {
                 (prefix, end, Vec::new())
@@ -96,11 +110,16 @@ pub fn extract_stats(san_tree: &mut SanTree) {
             let mut game_stack = step.game_stack.clone();
             let (prefix, offset, san_strs) = extract_san_strs(&step, &child);
             for san_str in san_strs.clone() {
-                let Game {position: old_pos, game_move: _} =
-                    game_stack.pop().expect("No step on top of game stack!!");
+                let Game {
+                    position: old_pos,
+                    game_move: _,
+                } = game_stack.pop().expect("No step on top of game stack!!");
                 let san_move: San = san_str.parse().expect("Invalid SAN.");
                 if let Ok(m) = san_move.to_move(&old_pos) {
-                    let new_pos = old_pos.clone().play(&m).expect("Invalid move for old pos!");
+                    let new_pos = old_pos
+                        .clone()
+                        .play(&m)
+                        .expect("Invalid move for old pos!");
                     game_stack.push(Game {
                         position: old_pos,
                         game_move: Some(m),
@@ -132,16 +151,9 @@ pub fn extract_stats(san_tree: &mut SanTree) {
             if let Some(game_stats) = child.value() {
                 for game in game_stack.iter() {
                     let keyable = chess_db::pos_to_keyable(&game.position);
-                    cdb.update_pos_wins(
-                        &keyable,
-                        *game_stats,
-                    );
+                    cdb.update_pos_wins(&keyable, *game_stats);
                     if let Some(m) = game.game_move.clone() {
-                        cdb.update_pos_move_wins(
-                            &keyable,
-                            m,
-                            *game_stats,
-                        )
+                        cdb.update_pos_move_wins(&keyable, m, *game_stats)
                     }
                 }
             }
