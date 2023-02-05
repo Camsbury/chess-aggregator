@@ -8,6 +8,7 @@ use sysinfo::{System, SystemExt};
 
 const MIN_RATING: u32 = 1800;
 const MIN_PLY_COUNT: u32 = 7;
+const THRESHOLD_WRITES: u32 = 1_000_000;
 
 pub struct MyVisitor<'a> {
     db: &'a DB,
@@ -17,6 +18,7 @@ pub struct MyVisitor<'a> {
     pub sys: System,
     pub skip_game: bool,
     pub ply_count: u32,
+    pub write_count: u32,
 }
 
 impl MyVisitor<'_> {
@@ -29,6 +31,7 @@ impl MyVisitor<'_> {
             sys: System::new_all(),
             skip_game: false,
             ply_count: 0,
+            write_count: 0,
         }
     }
 }
@@ -116,6 +119,12 @@ impl Visitor for MyVisitor<'_> {
                     },
                 ),
             }
+            self.write_count += 1;
+        }
+        if self.write_count > THRESHOLD_WRITES {
+            self.write_count = 0;
+            println!("Trie threshold reached: extracting stats");
+            traversal::extract_stats(self.db, &mut self.san_tree);
         }
     }
 }

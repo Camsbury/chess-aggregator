@@ -36,6 +36,7 @@ pub fn ingest(filename: &str, db_path: &str) {
             panic!("Failed to read games: {:?}", err);
         }
         println!("Built trie from games");
+        println!("Write count: {}", visitor.write_count);
         traversal::extract_stats(&db, &mut visitor.san_tree);
     }
 }

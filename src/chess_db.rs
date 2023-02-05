@@ -142,9 +142,8 @@ impl ChessDB<'_> {
     pub fn flush(&mut self) {
         println!("Creating batch");
         let mut batch = WriteBatch::default();
-        let cache = std::mem::take(&mut self.cache);
         println!("Iterating the cache");
-        for (k, v) in cache {
+        for (k, v) in self.cache.drain() {
             batch.put(k, v.to_bytes());
         }
         println!("Writing to DB");
