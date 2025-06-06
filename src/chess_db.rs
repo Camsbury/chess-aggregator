@@ -6,36 +6,30 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 //position stats
-const PS: &[u8] = "ps".as_bytes();
+const PS: &[u8] = b"ps";
 //position move stats
-const PMS: &[u8] = "pms".as_bytes();
-// something like 3x kb free memory if dynamic in future
-const MAX_CACHE_SIZE: usize = 1_000_000;
+const PMS: &[u8] = b"pms";
 
-pub fn pos_to_fen(pos: &Chess) -> String {
-    Fen::from_position(pos.clone(), EnPassantMode::Legal).to_string()
-}
-
-pub fn pos_to_keyable(pos: &Chess) -> Vec<u8> {
+#[must_use] pub fn pos_to_keyable(pos: &Chess) -> Vec<u8> {
     let mut hasher = DefaultHasher::new();
     Fen::from_position(pos.clone(), EnPassantMode::Legal).hash(&mut hasher);
     let hash = hasher.finish();
     hash.to_be_bytes().to_vec()
 }
 
-pub fn pos_to_key(keyable: &[u8]) -> Vec<u8> {
+#[must_use] pub fn pos_to_key(keyable: &[u8]) -> Vec<u8> {
     let mut ret = PS.to_owned();
     ret.append(&mut keyable.to_owned());
     ret
 }
 
-pub fn pos_to_prefix(keyable: &[u8]) -> Vec<u8> {
+#[must_use] pub fn pos_to_prefix(keyable: &[u8]) -> Vec<u8> {
     let mut ret = PMS.to_owned();
     ret.append(&mut keyable.to_owned());
     ret
 }
 
-pub fn pos_move_to_key(keyable: &[u8], chess_move: &Move) -> Vec<u8> {
+#[must_use] pub fn pos_move_to_key(keyable: &[u8], chess_move: &Move) -> Vec<u8> {
     let mut ret = pos_to_prefix(keyable);
     ret.append(
         &mut chess_move
@@ -64,14 +58,13 @@ pub struct ChessDB<'a> {
 }
 
 impl ChessDB<'_> {
-    pub fn new(db: &DB) -> ChessDB {
+    #[must_use] pub fn new(db: &DB) -> ChessDB {
         ChessDB {
             db,
             cache: HashMap::new(),
         }
     }
 
-    // TODO: include cache maybe?
     pub fn get_pos_stats(&mut self, pos: &Chess) -> Option<GameStats> {
         let keyable = pos_to_keyable(pos);
         let prefix = pos_to_prefix(&keyable);
@@ -86,7 +79,7 @@ impl ChessDB<'_> {
             let m = key_to_uci(&key, &prefix)
                 .to_move(pos)
                 .expect("The move is invalid uci for the position!");
-            let game_wins = GameWins::from_bytes(value.to_vec());
+            let game_wins = GameWins::from_bytes(&value);
             let uci = m.to_uci(CastlingMode::Standard).to_string();
             game_moves.insert(uci, game_wins);
         }
@@ -102,61 +95,11 @@ impl ChessDB<'_> {
         match self.cache.get(&key) {
             None => {
                 let game_wins =
-                    GameWins::from_bytes(self.db.get(&key).ok()??.to_vec());
+                    GameWins::from_bytes(&self.db.get(&key).ok()??);
                 self.cache.insert(key, game_wins);
                 Some(game_wins)
             }
             game_wins => game_wins.copied(),
-        }
-    }
-
-    pub fn update_pos_wins(&mut self, keyable: &[u8], game_wins: GameWins) {
-        let key = pos_to_key(keyable);
-        if let Some(db_stats) = Self::get_pos_wins(self, keyable) {
-            self.cache.insert(key, db_stats.combine(&game_wins));
-        } else {
-            self.cache.insert(key, game_wins);
-        }
-        if self.cache.len() > MAX_CACHE_SIZE {
-            self.flush();
-        }
-    }
-
-    pub fn get_pos_move_wins(
-        &mut self,
-        keyable: &[u8],
-        chess_move: Move,
-    ) -> Option<GameWins> {
-        let key = pos_move_to_key(keyable, &chess_move);
-        match self.cache.get(&key) {
-            None => {
-                let game_wins = GameWins::from_bytes(
-                    // self.db.get(pos_to_key(keyable)).ok()??.to_vec(),
-                    self.db.get(&key).ok()??.to_vec(),
-                );
-                self.cache.insert(key, game_wins);
-                Some(game_wins)
-            }
-            game_wins => game_wins.copied(),
-        }
-    }
-
-    pub fn update_pos_move_wins(
-        &mut self,
-        keyable: &[u8],
-        chess_move: Move,
-        game_wins: GameWins,
-    ) {
-        let key = pos_move_to_key(keyable, &chess_move);
-        if let Some(db_wins) =
-            Self::get_pos_move_wins(self, keyable, chess_move)
-        {
-            self.cache.insert(key, db_wins.combine(&game_wins));
-        } else {
-            self.cache.insert(key, game_wins);
-        }
-        if self.cache.len() > MAX_CACHE_SIZE {
-            self.flush();
         }
     }
 

@@ -10,16 +10,16 @@ pub struct GameWins {
 }
 
 impl GameWins {
-    pub fn new() -> GameWins {
-        GameWins {
+    #[must_use] pub const fn new() -> Self {
+        Self {
             black: 0,
             white: 0,
             draw: 0,
         }
     }
 
-    pub fn to_bytes(self) -> Vec<u8> {
-        vec![
+    #[must_use] pub fn to_bytes(self) -> Vec<u8> {
+        [
             self.black.to_be_bytes(),
             self.white.to_be_bytes(),
             self.draw.to_be_bytes(),
@@ -29,24 +29,23 @@ impl GameWins {
         .collect()
     }
 
-    // TODO: much unsafety - means erroneous DB data
-    pub fn from_bytes(bytes: Vec<u8>) -> GameWins {
-        GameWins {
+    #[must_use] pub fn from_bytes(bytes: &[u8]) -> Self {
+        Self {
             black: u32::from_be_bytes(bytes[..4].try_into().unwrap()),
             white: u32::from_be_bytes(bytes[4..8].try_into().unwrap()),
             draw: u32::from_be_bytes(bytes[8..12].try_into().unwrap()),
         }
     }
 
-    pub fn combine(self, other: &GameWins) -> GameWins {
-        GameWins {
+    #[must_use] pub const fn combine(self, other: &Self) -> Self {
+        Self {
             black: self.black + other.black,
             white: self.white + other.white,
             draw: self.draw + other.draw,
         }
     }
 
-    pub fn total(&self) -> u32 {
+    #[must_use] pub const fn total(&self) -> u32 {
         self.black + self.white + self.draw
     }
 }
@@ -58,8 +57,8 @@ pub struct GameStats {
 }
 
 impl GameStats {
-    pub fn new() -> GameStats {
-        GameStats {
+    #[must_use] pub fn new() -> Self {
+        Self {
             game_wins: GameWins::new(),
             game_moves: HashMap::new(),
         }
