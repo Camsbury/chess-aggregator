@@ -4,7 +4,6 @@ use crate::game_stats::GameWins;
 use crate::visitor::SanTree;
 use nibble_vec::Nibblet;
 use radix_trie::{SubTrie, Trie, TrieCommon};
-use rocksdb::DB;
 use shakmaty::{san::San, Chess, Move, Position};
 
 const SEPARATOR: u8 = 32;

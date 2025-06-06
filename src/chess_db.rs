@@ -10,7 +10,7 @@ const PS: &[u8] = "ps".as_bytes();
 //position move stats
 const PMS: &[u8] = "pms".as_bytes();
 // something like 3x kb free memory if dynamic in future
-const MAX_CACHE_SIZE: usize = 60_000_000;
+const MAX_CACHE_SIZE: usize = 1_000_000;
 
 pub fn pos_to_fen(pos: &Chess) -> String {
     Fen::from_position(pos.clone(), EnPassantMode::Legal).to_string()
@@ -131,7 +131,8 @@ impl ChessDB<'_> {
         match self.cache.get(&key) {
             None => {
                 let game_wins = GameWins::from_bytes(
-                    self.db.get(pos_to_key(keyable)).ok()??.to_vec(),
+                    // self.db.get(pos_to_key(keyable)).ok()??.to_vec(),
+                    self.db.get(&key).ok()??.to_vec(),
                 );
                 self.cache.insert(key, game_wins);
                 Some(game_wins)

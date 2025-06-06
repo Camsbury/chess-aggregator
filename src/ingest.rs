@@ -2,24 +2,20 @@ use crate::traversal;
 use crate::visitor;
 use pgn_reader::BufferedReader;
 use std::fs::File;
-use std::io::{BufRead, BufReader};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use zstd::stream::read::Decoder;
+use crate::config::IngestConfig;
 
-pub fn ingest(filename: &str, db_path: &str) {
-    let san_tree_shared = Arc::new(Mutex::new(visitor::SanTree::new(db_path)));
+pub fn ingest(cfg: IngestConfig) {
+    let san_tree_shared =
+        Arc::new(Mutex::new(visitor::SanTree::new(
+            &cfg.db_path,
+            cfg.threshold_writes,
+        )));
     let mut handles = vec![];
 
-    let file = match File::open(filename) {
-        Ok(file) => file,
-        Err(err) => {
-            panic!("Failed to open file listing .pgn.zst files: {:?}", err);
-        }
-    };
-    let reader = BufReader::new(file);
-    for line in reader.lines() {
-        let pgn_path = line.expect("Line didn't parse?!");
+    for pgn_path in cfg.pgn_files {
         if pgn_path.is_empty() {
             continue;
         }
@@ -33,7 +29,13 @@ pub fn ingest(filename: &str, db_path: &str) {
         };
         let decoder = Decoder::new(file).unwrap();
         let mut buffered = BufferedReader::new(decoder);
-        let mut visitor = visitor::MyVisitor::new(Arc::clone(&san_tree_shared));
+        let mut visitor = visitor::MyVisitor::new(
+            Arc::clone(&san_tree_shared),
+            cfg.min_rating,
+            cfg.min_ply_count,
+            cfg.required_words.clone(),
+            cfg.forbidden_words.clone(),
+        );
         let handle = thread::spawn(move || {
             if let Err(err) = buffered.read_all(&mut visitor) {
                 panic!("Failed to read games: {:?}", err);

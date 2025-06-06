@@ -6,18 +6,15 @@ use radix_trie::Trie;
 use rocksdb::{Options, DB};
 use std::sync::{Arc, Mutex};
 
-const MIN_RATING: u32 = 1800;
-const MIN_PLY_COUNT: u32 = 7;
-const THRESHOLD_WRITES: u32 = 2_000_000;
-
 pub struct SanTree {
     pub db: DB,
     pub tree: Trie<String, GameWins>,
     pub write_count: u32,
+    pub threshold_writes: u32,
 }
 
 impl SanTree {
-    pub fn new(db_path: &str) -> SanTree {
+    pub fn new(db_path: &str, threshold_writes: u32) -> SanTree {
         let mut db_opts = Options::default();
         db_opts.create_if_missing(true);
         let db = DB::open(&db_opts, db_path).unwrap();
@@ -26,12 +23,13 @@ impl SanTree {
             db,
             tree: Trie::default(),
             write_count: 0,
+            threshold_writes,
         }
     }
 
     pub fn inc_writes(&mut self) {
         self.write_count += 1;
-        if self.write_count > THRESHOLD_WRITES {
+        if self.write_count > self.threshold_writes {
             self.write_count = 0;
             println!("Trie threshold reached: extracting stats");
             traversal::extract_stats(self);
@@ -45,16 +43,30 @@ pub struct MyVisitor {
     pub winner: Option<Color>,
     pub skip_game: bool,
     pub ply_count: u32,
+    pub min_rating: u32,
+    pub min_ply_count: u32,
+    pub required_words: Vec<String>,
+    pub forbidden_words: Vec<String>,
 }
 
 impl MyVisitor {
-    pub fn new(san_tree: Arc<Mutex<SanTree>>) -> MyVisitor {
+    pub fn new(
+        san_tree: Arc<Mutex<SanTree>>,
+        min_rating: u32,
+        min_ply_count: u32,
+        required_words: Vec<String>,
+        forbidden_words: Vec<String>,
+    ) -> MyVisitor {
         MyVisitor {
             san_tree,
             san_string: String::new(),
             winner: None,
             skip_game: false,
             ply_count: 0,
+            min_rating,
+            min_ply_count,
+            required_words,
+            forbidden_words,
         }
     }
 }
@@ -74,12 +86,37 @@ impl Visitor for MyVisitor {
             } else {
                 match btoi::btoi::<u32>(value.as_bytes()) {
                     Ok(rating) => {
-                        if rating < MIN_RATING {
+                        if rating < self.min_rating {
                             self.skip_game = true;
                         }
                     }
                     _ => self.skip_game = true,
                 }
+            }
+        }
+        else if key == b"Event" {
+            if let Ok(ev_raw) = std::str::from_utf8(value.as_bytes()) {
+                // strip optional quotes then lower‑case once
+                let ev_trim = ev_raw.trim_matches(&['"', '\''][..]);
+                let ev_lc   = ev_trim.to_ascii_lowercase();
+
+                let has_required =
+                    self.required_words.is_empty() ||
+                    self.required_words
+                        .iter()
+                        .any(|w| ev_lc.contains(w));
+
+                let has_forbidden =
+                    self.forbidden_words
+                        .iter()
+                        .any(|w| ev_lc.contains(w));
+
+                if !has_required || has_forbidden {
+                    self.skip_game = true;
+                }
+            } else {
+                // non‑UTF‑8 Event tag → drop defensively
+                self.skip_game = true;
             }
         }
     }
@@ -113,7 +150,7 @@ impl Visitor for MyVisitor {
     fn end_game(&mut self) -> Self::Result {
         let s = std::mem::take(&mut self.san_string);
         let mut san_tree = self.san_tree.lock().unwrap();
-        if self.ply_count > MIN_PLY_COUNT {
+        if self.ply_count > self.min_ply_count {
             match self.winner {
                 Some(Color::White) => san_tree.tree.map_with_default(
                     s,
