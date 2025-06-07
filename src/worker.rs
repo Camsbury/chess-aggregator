@@ -66,6 +66,6 @@ fn winner_to_wins(winner: Option<Color>) -> GameWins {
     match winner {
         Some(Color::White) => GameWins { white: 1, ..Default::default() },
         Some(Color::Black) => GameWins { black: 1, ..Default::default() },
-        None               => GameWins { draw:  1, ..Default::default() },
+        None               => GameWins { draws:  1, ..Default::default() },
     }
 }

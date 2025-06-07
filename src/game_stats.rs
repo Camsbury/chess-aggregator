@@ -6,7 +6,7 @@ use std::convert::TryInto;
 pub struct GameWins {
     pub black: u32,
     pub white: u32,
-    pub draw: u32,
+    pub draws: u32,
 }
 
 impl GameWins {
@@ -14,7 +14,7 @@ impl GameWins {
         Self {
             black: 0,
             white: 0,
-            draw: 0,
+            draws: 0,
         }
     }
 
@@ -22,7 +22,7 @@ impl GameWins {
         [
             self.black.to_be_bytes(),
             self.white.to_be_bytes(),
-            self.draw.to_be_bytes(),
+            self.draws.to_be_bytes(),
         ]
         .iter()
         .flat_map(|s| s.iter().copied())
@@ -33,7 +33,7 @@ impl GameWins {
         Self {
             black: u32::from_be_bytes(bytes[..4].try_into().unwrap()),
             white: u32::from_be_bytes(bytes[4..8].try_into().unwrap()),
-            draw: u32::from_be_bytes(bytes[8..12].try_into().unwrap()),
+            draws: u32::from_be_bytes(bytes[8..12].try_into().unwrap()),
         }
     }
 
@@ -41,12 +41,12 @@ impl GameWins {
         Self {
             black: self.black + other.black,
             white: self.white + other.white,
-            draw: self.draw + other.draw,
+            draws: self.draws + other.draws,
         }
     }
 
     #[must_use] pub const fn total(&self) -> u32 {
-        self.black + self.white + self.draw
+        self.black + self.white + self.draws
     }
 }
 

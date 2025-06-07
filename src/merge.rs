@@ -2,7 +2,7 @@ use rocksdb::MergeOperands;
 use crate::game_stats::GameWins;
 
 /// Merge-operator for `RocksDB` values that store `GameWins`
-/// (12-byte {black, white, draw} counters packed big-endian).
+/// (12-byte {black, white, draws} counters packed big-endian).
 #[must_use] pub fn wins_merge_op(
     _key: &[u8],
     existing: Option<&[u8]>,
