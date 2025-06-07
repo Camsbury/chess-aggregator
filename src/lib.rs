@@ -17,6 +17,7 @@ pub mod server;
 pub mod extractor;
 pub mod worker;
 pub mod merge;
+pub mod file;
 
 use shakmaty::{Color, san::SanPlus};
 

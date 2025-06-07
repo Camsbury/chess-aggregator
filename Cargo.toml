@@ -10,6 +10,7 @@ anyhow = "1.0.98"
 axum = "0.6.4"
 btoi = "0.4.2"
 chess = "3.2.0"
+chrono = "0.4.41"
 clap = { version = "4.5.39", features = ["derive"] }
 crossbeam-channel = "0.5.15"
 flate2 = "1.1.1"

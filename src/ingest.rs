@@ -10,6 +10,8 @@ use crate::config;
 use crate::extractor::Extractor;
 use crate::merge::wins_merge_op;
 use crate::worker;
+use crate::chess_db::FS;
+use crate::file;
 use crossbeam_channel::Sender;
 use crossbeam_channel as chan;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
@@ -18,6 +20,7 @@ use rayon::ThreadPoolBuilder;
 use rocksdb::{Options, DB};
 use std::{fs, io};
 use std::sync::Arc;
+use chrono;
 
 /// Top‑level ingestion entry‑point with a single‑sender lifetime fix.
 ///
@@ -57,11 +60,12 @@ pub fn ingest(cfg: &config::Ingest) -> anyhow::Result<()> {
         }
 
         // 5) Reader thread: owns *the* Sender and drops it when done.
+        let reader_db = db.clone();
         let reader_handle = std::thread::spawn({
             let tx = tx;           // move, do not clone – guarantees closure
             let cfg = cfg.clone();
             move || {
-                if let Err(err) = run_reader(&cfg, tx) {
+                if let Err(err) = run_reader(&cfg, &reader_db, tx) {
                     eprintln!("[ingest] reader error: {err}");
                 }
             }
@@ -78,7 +82,11 @@ pub fn ingest(cfg: &config::Ingest) -> anyhow::Result<()> {
 ///
 /// * `cfg.pgn_files` – list of archives (plain PGN, `.gz`, `.zst`, …).
 /// * `tx`            – bounded channel feeding parsed games to workers.
-pub fn run_reader(cfg: &config::Ingest, tx: Sender<GameSummary>) -> AnyResult<()> {
+pub fn run_reader(
+    cfg: &config::Ingest,
+    db: &DB,
+    tx: Sender<GameSummary>,
+) -> AnyResult<()> {
     // 1️⃣  Total compressed bytes across all input archives ---------------
     let total_bytes: u64 = cfg
         .pgn_files
@@ -102,6 +110,17 @@ pub fn run_reader(cfg: &config::Ingest, tx: Sender<GameSummary>) -> AnyResult<()
 
     // 3️⃣  Process each archive ------------------------------------------
     for path in &cfg.pgn_files {
+         // ① build the RocksDB key
+        let mut file_key = Vec::from(FS);
+        file_key.extend_from_slice(&file::id(path)?);
+
+        // ② skip if we already saw it
+        if db.get(&file_key)?.is_some() {
+            eprintln!("Skipping already-ingested {path}");
+            continue;
+        }
+
+
         let short = std::path::Path::new(path)
             .file_name()
             .map_or_else(|| path.into(), |os| os.to_string_lossy());
@@ -144,6 +163,7 @@ pub fn run_reader(cfg: &config::Ingest, tx: Sender<GameSummary>) -> AnyResult<()
         br.read_all(&mut vis)
             .with_context(|| format!("parse {path:?}"))?;
         bar.finish_and_clear();
+        db.put(&file_key, chrono::Utc::now().timestamp().to_be_bytes())?;
     }
     overall.finish_and_clear();                     // leave the bar at “done”
     mp.println("stream closed — workers finishing payloads…")?;

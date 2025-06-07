@@ -9,6 +9,8 @@ use std::hash::{Hash, Hasher};
 const PS: &[u8] = b"ps";
 //position move stats
 const PMS: &[u8] = b"pms";
+//file ingestion stats
+pub const FS: &[u8] = b"fs";
 
 #[must_use] pub fn pos_to_keyable(pos: &Chess) -> Vec<u8> {
     let mut hasher = DefaultHasher::new();
