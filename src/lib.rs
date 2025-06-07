@@ -21,6 +21,7 @@ pub mod server;
 pub mod worker;
 
 use shakmaty::{Color, san::SanPlus};
+use serde::Serialize;
 
 
 /// Chess game data to ingest
@@ -28,4 +29,21 @@ use shakmaty::{Color, san::SanPlus};
 pub struct GameSummary {
     pub winner: Option<Color>,
     pub sans: Vec<SanPlus>,
+}
+
+#[derive(Serialize)]
+pub struct MoveResult {
+    uci:   String,
+    san:   String,
+    white: u32,
+    black: u32,
+    draws: u32,
+}
+
+#[derive(Serialize)]
+pub struct PositionResult {
+    white: u32,
+    black: u32,
+    draws: u32,
+    moves: Vec<MoveResult>,
 }

@@ -1,12 +1,19 @@
-use actix_web::{get, web, App, HttpServer, Responder};
+use actix_web::{
+    get,
+    web,
+    error::ErrorInternalServerError,
+    App,
+    HttpServer,
+    Result,
+};
 use crate::chess_db::ChessDB;
 use crate::config;
-use crate::game_stats::GameStats;
 use crate::merge::wins_merge_op;
 use crate::rocks_cfg;
+use crate::{MoveResult, PositionResult};
 use rocksdb::DB;
 use serde::Deserialize;
-use shakmaty::{fen::Fen, CastlingMode, Chess};
+use shakmaty::{uci::Uci, san::SanPlus, fen::Fen, CastlingMode, Chess};
 
 #[derive(Deserialize)]
 struct Params {
@@ -21,7 +28,7 @@ struct AppState {
 async fn index(
     data: web::Data<AppState>,
     params: web::Query<Params>,
-) -> impl Responder {
+) -> Result<web::Json<PositionResult>> {
     let mut db_opts = rocks_cfg::tuned();
     db_opts.set_merge_operator_associative("add_wins", wins_merge_op);
     let db = DB::open(&db_opts, data.db_path.clone())
@@ -31,10 +38,38 @@ async fn index(
         .into_position(CastlingMode::Standard)
         .expect("Not a parseable FEN?!");
     let mut cdb = ChessDB::new(&db);
-    let stats: GameStats = cdb
-        .get_pos_stats(&pos)
+    let stats = cdb.get_pos_stats(&pos)
         .expect("Failed getting position stats");
-    web::Json(stats)
+
+    // --- convert the HashMap<String, GameWins> into a Vec<MoveResult> ---
+    let mut moves = Vec::with_capacity(stats.game_moves.len());
+    for (uci_str, wins) in stats.game_moves {
+        // ① parse the UCI, ② turn it into a Move, ③ render SAN
+        let mv  = Uci::from_ascii(uci_str.as_bytes())
+            .map_err(ErrorInternalServerError)? // ➍ UCI was malformed
+            .to_move(&pos)
+            .map_err(ErrorInternalServerError)?;
+
+        let san = SanPlus::from_move(pos.clone(), &mv).to_string();
+
+        moves.push(MoveResult {
+            uci:   uci_str,
+            san,
+            white: wins.white,
+            black: wins.black,
+            draws: wins.draws,                      // field is named `draw` in GameWins:contentReference[oaicite:1]{index=1}
+        });
+    }
+
+    // --- assemble the final JSON object ---
+    let body = PositionResult {
+        white: stats.game_wins.white,
+        black: stats.game_wins.black,
+        draws: stats.game_wins.draws,               // same rename here
+        moves,
+    };
+
+    Ok(web::Json(body))
 }
 
 #[actix_web::main]
