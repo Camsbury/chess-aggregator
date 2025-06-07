@@ -9,15 +9,16 @@ extern crate shakmaty;
 extern crate sysinfo;
 extern crate zstd;
 
-pub mod config;
 pub mod chess_db;
+pub mod config;
+pub mod extractor;
+pub mod file;
 pub mod game_stats;
 pub mod ingest;
-pub mod server;
-pub mod extractor;
-pub mod worker;
 pub mod merge;
-pub mod file;
+pub mod rocks_cfg;
+pub mod server;
+pub mod worker;
 
 use shakmaty::{Color, san::SanPlus};
 

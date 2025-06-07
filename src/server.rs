@@ -3,7 +3,8 @@ use crate::chess_db::ChessDB;
 use crate::config;
 use crate::game_stats::GameStats;
 use crate::merge::wins_merge_op;
-use rocksdb::{Options, DB};
+use crate::rocks_cfg;
+use rocksdb::DB;
 use serde::Deserialize;
 use shakmaty::{fen::Fen, CastlingMode, Chess};
 
@@ -21,9 +22,7 @@ async fn index(
     data: web::Data<AppState>,
     params: web::Query<Params>,
 ) -> impl Responder {
-    //TODO: handle errors for all the following unwraps
-    let mut db_opts = Options::default();
-    db_opts.create_if_missing(true);
+    let mut db_opts = rocks_cfg::tuned();
     db_opts.set_merge_operator_associative("add_wins", wins_merge_op);
     let db = DB::open(&db_opts, data.db_path.clone())
         .expect("Failed to open the database!");

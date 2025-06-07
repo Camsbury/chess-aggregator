@@ -1,9 +1,14 @@
 use crate::game_stats::{GameStats, GameWins};
 use rocksdb::{WriteBatch, DB};
-use shakmaty::{fen::Fen, uci::Uci, CastlingMode, Chess, EnPassantMode, Move};
-use std::collections::hash_map::DefaultHasher;
+use shakmaty::{
+    uci::Uci,
+    CastlingMode,
+    Chess,
+    EnPassantMode,
+    Move,
+    zobrist::{Zobrist64, ZobristHash},
+};
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
 
 //position stats
 const PS: &[u8] = b"ps";
@@ -12,11 +17,12 @@ const PMS: &[u8] = b"pms";
 //file ingestion stats
 pub const FS: &[u8] = b"fs";
 
-#[must_use] pub fn pos_to_keyable(pos: &Chess) -> Vec<u8> {
-    let mut hasher = DefaultHasher::new();
-    Fen::from_position(pos.clone(), EnPassantMode::Legal).hash(&mut hasher);
-    let hash = hasher.finish();
-    hash.to_be_bytes().to_vec()
+#[must_use]
+pub fn pos_to_keyable(pos: &Chess) -> Vec<u8> {
+    // hash that ignores half-move and full-move counters
+    let h: u64 = pos.zobrist_hash::<Zobrist64>(EnPassantMode::Legal).into();
+    // eight-byte prefix
+    h.to_be_bytes().into()
 }
 
 #[must_use] pub fn pos_to_key(keyable: &[u8]) -> Vec<u8> {

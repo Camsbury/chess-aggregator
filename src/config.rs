@@ -19,8 +19,8 @@ pub struct Ingest {
     /// Max entries kept in the in‑memory `RocksDB` write‑cache.
     #[serde(default = "default_cache_size")]
     pub cache_size: usize,
-    /// List of `.pgn.zst` archives to process.
-    pub pgn_files: Vec<String>,
+    /// Location of `.pgn.zst` archives to process.
+    pub pgn_dir: String,
 }
 
 /// Shape of the JSON config expected by the `ingest` sub‑command.

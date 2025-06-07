@@ -6,18 +6,19 @@
 
 use anyhow::{Context, Result as AnyResult};
 use crate::GameSummary;
+use crate::chess_db::FS;
 use crate::config;
 use crate::extractor::Extractor;
-use crate::merge::wins_merge_op;
-use crate::worker;
-use crate::chess_db::FS;
 use crate::file;
+use crate::merge::wins_merge_op;
+use crate::rocks_cfg;
+use crate::worker;
 use crossbeam_channel::Sender;
 use crossbeam_channel as chan;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use num_cpus;
 use rayon::ThreadPoolBuilder;
-use rocksdb::{Options, DB};
+use rocksdb::DB;
 use std::{fs, io};
 use std::sync::Arc;
 use chrono;
@@ -30,8 +31,7 @@ use chrono;
 /// required in the outer scope.
 pub fn ingest(cfg: &config::Ingest) -> anyhow::Result<()> {
     // 0) Open (or create) RocksDB once.
-    let mut db_opts = Options::default();
-    db_opts.create_if_missing(true);
+    let mut db_opts = rocks_cfg::tuned();
     db_opts.set_merge_operator_associative("add_wins", wins_merge_op);
     let db = Arc::new(DB::open(&db_opts, &cfg.db_path)?);
 
@@ -80,7 +80,7 @@ pub fn ingest(cfg: &config::Ingest) -> anyhow::Result<()> {
 
 /// Runs inside the *reader* thread.
 ///
-/// * `cfg.pgn_files` – list of archives (plain PGN, `.gz`, `.zst`, …).
+/// * `cfg.pgn_dir` – location of archives (plain PGN, `.gz`, `.zst`, …).
 /// * `tx`            – bounded channel feeding parsed games to workers.
 pub fn run_reader(
     cfg: &config::Ingest,
@@ -88,8 +88,8 @@ pub fn run_reader(
     tx: Sender<GameSummary>,
 ) -> AnyResult<()> {
     // 1️⃣  Total compressed bytes across all input archives ---------------
-    let total_bytes: u64 = cfg
-        .pgn_files
+    let archives = list_archives(&cfg.pgn_dir)?;
+    let total_bytes: u64 = archives
         .iter()
         .try_fold(0u64, |acc, p| {
             let len = fs::metadata(p)
@@ -109,7 +109,7 @@ pub fn run_reader(
     );
 
     // 3️⃣  Process each archive ------------------------------------------
-    for path in &cfg.pgn_files {
+    for path in &archives {
          // ① build the RocksDB key
         let mut file_key = Vec::from(FS);
         file_key.extend_from_slice(&file::id(path)?);
@@ -171,4 +171,22 @@ pub fn run_reader(
     // 4️⃣  Done – drop the *owned* sender so the channel closes -----------
     drop(tx);
     Ok(())
+}
+
+/// Return every regular file inside `dir` whose name ends with `.pgn.zst`,
+/// sorted lexicographically so the ingest order is deterministic.
+fn list_archives(dir: &str) -> anyhow::Result<Vec<String>> {
+    let mut v = std::fs::read_dir(dir)
+        .with_context(|| format!("read_dir {dir}"))?
+        .filter_map(std::result::Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.is_file() &&
+                   p.file_name()
+                     .and_then(|n| n.to_str())
+                     .map_or(false, |n| n.ends_with(".pgn.zst")))
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+
+    v.sort();        // stable, predictable run-to-run order
+    Ok(v)
 }
